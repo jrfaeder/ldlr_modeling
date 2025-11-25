@@ -9,10 +9,8 @@ Computational rule-based model of the LDL receptor system using PyBioNetGen.
 ## Quick Start
 
 ```bash
-# Setup (first time)
-./setup_project_pybngl.sh
-
-# Activate environment
+# Setup
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
