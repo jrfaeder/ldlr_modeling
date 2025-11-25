@@ -35,8 +35,6 @@ python scripts/analyze_results.py
 ## Documentation
 
 - [1-Week Plan](docs/PLAN_1WEEK.md) - Project timeline
-- [Day 1 Guide](docs/DAY1_GUIDE.md) - Getting started
-- [3-Day MVP](docs/MVP_3DAY.md) - Minimal version
 
 ## Technology
 
