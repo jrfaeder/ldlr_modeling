@@ -1,39 +1,49 @@
 # LDLR Functional Landscape Modeling
 
-Rule-based computational model of LDLR for understanding familial hypercholesterolemia.
+[![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/)
+[![PyBioNetGen](https://img.shields.io/badge/PyBioNetGen-0.8%2B-green)](https://github.com/RuleWorld/PyBioNetGen)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+Computational rule-based model of the LDL receptor system using PyBioNetGen.
 
 ## Quick Start
 
 ```bash
-# Setup (first time)
-./setup_project_pybngl.sh
-
-# Activate environment
+# Setup
+python3 -m venv venv
 source venv/bin/activate
+pip install -r requirements.txt
 
 # Run simulations
 python scripts/run_variants.py
 
-# Analyze
+# Analyze results
 python scripts/analyze_results.py
 ```
-
-## Technology
-
-- **PyBioNetGen**: Rule-based modeling in Python
-- **Python 3.8+**: Core language
-- **Pandas/NumPy**: Data analysis
-- **Matplotlib**: Visualization
 
 ## Project Structure
 
 ```
 .
-├── models/          # Model code
-├── scripts/         # Analysis scripts
-├── results/         # Figures and data
+├── models/          # PyBioNetGen model code
+├── scripts/         # Analysis pipeline
+├── data/            # Variant functional scores
+├── results/         # Figures and simulation data
 └── docs/            # Documentation
 ```
+
+## Documentation
+
+- [1-Week Plan](docs/PLAN_1WEEK.md) - Project timeline
+- [Day 1 Guide](docs/DAY1_GUIDE.md) - Getting started
+- [3-Day MVP](docs/MVP_3DAY.md) - Minimal version
+
+## Technology
+
+- **PyBioNetGen** - Rule-based modeling in Python
+- **Python 3.8+** - Core language
+- **pandas/numpy/scipy** - Data analysis
+- **matplotlib/seaborn** - Visualization
 
 ## Citation
 

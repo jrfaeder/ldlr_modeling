@@ -157,7 +157,7 @@ Rule-based computational model of LDLR for understanding familial hypercholester
 
 ```bash
 # Setup (first time)
-./setup_project_pybngl.sh
+./setup_project.sh
 
 # Activate environment
 source venv/bin/activate
@@ -302,7 +302,7 @@ echo "3. Start coding! 🚀"
 echo ""
 echo "Helpful commands:"
 echo "  python scripts/test_installation.py  # Test everything works"
-echo "  python -c 'import bionetgen; print(bionetgen.__version__)'  # Check version"
+echo "  bionetgen --version  # Check version"
 echo ""
 EOPYTHON
 
