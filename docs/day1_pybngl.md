@@ -52,12 +52,16 @@ pip install pandas numpy scipy matplotlib seaborn
 pip freeze > requirements.txt
 
 # Test installation
-python -c "import bionetgen; print('PyBioNetGen version:', bionetgen.__version__)"
+bionetgen --version
 ```
 
-**Expected output**: 
+**Expected output** (exact version numbers may vary): 
 ```
-PyBioNetGen version: 0.8.2
+BioNetGen simple command line interface 0.8.6
+BioNetGen version: BioNetGen-2.9.3
+Cement Framework 3.0.10
+Python 3.12.3
+Platform macOS-14.7.4-arm64-arm-64bit
 ```
 
 If this works, you're ready to go! 🎉
