@@ -68,40 +68,7 @@ If this works, you're ready to go! 🎉
 
 ---
 
-### Step 3: Create Project Structure (10 min)
-
-```bash
-# Create directories
-mkdir models scripts data results/figures results/data docs -p
-
-# Create initial files
-touch README.md
-touch models/ldlr_model.py
-touch scripts/run_variants.py
-touch scripts/analyze_results.py
-touch data/variants.csv
-
-# Verify structure
-tree -L 2
-```
-
-**Should see**:
-```
-ldlr_modeling/
-├── models/
-├── scripts/
-├── data/
-├── results/
-│   ├── figures/
-│   └── data/
-├── docs/
-├── venv/
-└── requirements.txt
-```
-
----
-
-### Step 4: Create First Simple Test (45 min)
+### Step 3: Create First Simple Test (45 min)
 
 Create `models/simple_test.py`:
 
@@ -195,7 +162,7 @@ python models/simple_test.py
 
 ---
 
-### Step 5: Understand PyBioNetGen Basics (30 min)
+### Step 4: Understand PyBioNetGen Basics (30 min)
 
 **Key concepts:**
 
@@ -278,7 +245,7 @@ end model
 
 ## Afternoon Session: Build LDLR Model (3 hours)
 
-### Step 6: Design Simplified LDLR Model (30 min)
+### Step 5: Design Simplified LDLR Model (30 min)
 
 **Model design decisions:**
 
@@ -305,7 +272,7 @@ Parameters:
 
 ---
 
-### Step 7: Create Base LDLR Model (90 min)
+### Step 6: Create Base LDLR Model (90 min)
 
 Create `models/ldlr_model.py`:
 
@@ -576,7 +543,7 @@ python models/ldlr_model.py
 
 ---
 
-### Step 8: Verify Model Behavior (30 min)
+### Step 7: Verify Model Behavior (30 min)
 
 Create `scripts/test_model.py`:
 
