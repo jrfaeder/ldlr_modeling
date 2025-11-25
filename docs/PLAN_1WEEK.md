@@ -18,33 +18,9 @@ Build a functional LDLR model using PyBioNetGen that demonstrates:
 
 ---
 
-## What's Been Cut from 2-Week Version
-
-### Removed Entirely
-- ❌ Extensive parameter optimization
-- ❌ Large variant library (10-15 → 5 variants)
-- ❌ Multiple mechanistic analyses
-- ❌ Cooperative binding complexity
-- ❌ Iterative model refinement
-- ❌ LA modules 1, 2, and 6 (weak contributors)
-
-### Simplified
-- 📉 Model: 4 LA modules, independent binding
-- 📉 Analysis: 2 plots instead of 4-6
-- 📉 Documentation: README with results only
-- 📉 Validation: Simple correlation only
-
----
-
 ## Daily Schedule (5 days × 6 hours = 30 hours)
 
 ### **Day 1: Setup & Basic Model** (Monday)
-
-#### Morning Session (3 hours)
-- [ ] Install PyBioNetGen and dependencies
-- [ ] Set up project structure
-- [ ] Create and test simple model
-- [ ] Verify everything works
 
 #### Afternoon Session (3 hours)
 - [ ] Build base LDLR model (simplified)
