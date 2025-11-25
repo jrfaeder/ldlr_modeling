@@ -6,7 +6,7 @@ Rule-based computational model of LDLR for understanding familial hypercholester
 
 ```bash
 # Setup (first time)
-./setup_project_pybngl.sh
+./setup_project.sh
 
 # Activate environment
 source venv/bin/activate
