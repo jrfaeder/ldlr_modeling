@@ -1,0 +1,6 @@
+variant,uptake_score,domain,clinvar
+WT,1.00,WT,WT
+C52Y,0.05,LA1,pathogenic
+D147N,0.15,LA3,pathogenic
+P526L,0.95,EGF-A,benign
+T705I,0.92,beta_propeller,benign

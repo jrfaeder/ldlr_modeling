@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+*.egg-info/
+
+# BioNetGen outputs
+*.net
+*.gdat
+*.cdat
+*.rxn
+
+# Results
+results/data/*.gdat
+results/data/*.cdat
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
