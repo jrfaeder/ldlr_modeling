@@ -80,22 +80,45 @@ begin observables
 end observables
 
 begin reaction rules
-    # LDLR-LDL Binding
-    LDLR(la3,loc~surface) + LDL(ldlr,loc~extra) <-> \\
-        LDLR(la3!1,loc~surface).LDL(ldlr!1,loc~extra) \\
-        k_on_base*strength_LA3, k_off_surf
+    # Catalytic LDLR–LDL Binding 
+    # LA3
+    LDLR(la3,loc~surface) + LDL(ldlr,loc~extra) -> \\
+        LDLR(la3!1,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra) \\
+        k_on_base*strength_LA3
 
-    LDLR(la4,loc~surface) + LDL(ldlr,loc~extra) <-> \\
-        LDLR(la4!1,loc~surface).LDL(ldlr!1,loc~extra) \\
-        k_on_base*strength_LA4, k_off_surf
+    LDLR(la3!1,loc~surface).LDL(ldlr!1,loc~extra) -> \\
+        LDLR(la3,loc~surface) \\
+        k_off_surf
 
-    LDLR(la5,loc~surface) + LDL(ldlr,loc~extra) <-> \\
-        LDLR(la5!1,loc~surface).LDL(ldlr!1,loc~extra) \\
-        k_on_base*strength_LA5, k_off_surf
+    #LA4
 
-    LDLR(la7,loc~surface) + LDL(ldlr,loc~extra) <-> \\
-        LDLR(la7!1,loc~surface).LDL(ldlr!1,loc~extra) \\
-        k_on_base*strength_LA7, k_off_surf
+    LDLR(la4,loc~surface) + LDL(ldlr,loc~extra) -> \\
+        LDLR(la4!1,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra) \\
+        k_on_base*strength_LA4
+
+    LDLR(la4!1,loc~surface).LDL(ldlr!1,loc~extra) -> \\
+        LDLR(la4,loc~surface) \\
+        k_off_surf
+    
+    #LA5
+
+    LDLR(la5,loc~surface) + LDL(ldlr,loc~extra) -> \\
+        LDLR(la5!1,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra) \\
+        k_on_base*strength_LA5
+
+    LDLR(la5!1,loc~surface).LDL(ldlr!1,loc~extra) -> \\
+        LDLR(la5,loc~surface) \\
+        k_off_surf
+
+        
+    #LA7
+    LDLR(la7,loc~surface) + LDL(ldlr,loc~extra) -> \\
+        LDLR(la7!1,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra) \\
+        k_on_base*strength_LA7
+
+    LDLR(la7!1,loc~surface).LDL(ldlr!1,loc~extra) -> \\
+        LDLR(la7,loc~surface) \\
+        k_off_surf
 
     # Endocytosis
     LDLR(la3!1,loc~surface).LDL(ldlr!1,loc~extra) -> \\
@@ -129,7 +152,7 @@ begin reaction rules
 
     # LDL Degradation
     LDL(ldlr,loc~endo) -> LDL(ldlr,loc~lyso)  k_recycle
-    LDL(loc~lyso) -> 0  k_degrade
+    LDL(ldlr,loc~lyso) -> 0  k_degrade
 
 end reaction rules
 
@@ -176,7 +199,7 @@ end model
         df = pd.DataFrame(gdat_array)
 
         print("GDAT columns:", df.columns.tolist())
-
+        
 
         # detect endosome/lysosome columns
         endo_cols = [c for c in df.columns if c.lower() == "ldl_endo"]
@@ -257,7 +280,7 @@ if __name__ == "__main__":
     wt_model.run()
     
     # Plot results
-    wt_model.plot(save_path='results/figures/ldlr_wt.png')
+    wt_model.plot(save_path='results/figures/ldlr_wt2.png')
     
     # Print summary
     data = wt_model.get_data()
