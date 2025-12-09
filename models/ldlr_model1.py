@@ -81,44 +81,22 @@ end observables
 
 begin reaction rules
     # Catalytic LDLR–LDL Binding 
-    # LA3
-    LDLR(la3,loc~surface) + LDL(ldlr,loc~extra) -> \\
-        LDLR(la3!1,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra) \\
-        k_on_base*strength_LA3
+    # LDLR-LDL Binding
+    LDLR(la3,loc~surface) + LDL(ldlr,loc~extra) <-> \\
+        LDLR(la3!1,loc~surface).LDL(ldlr!1,loc~extra) \\
+        k_on_base*strength_LA3, k_off_surf
 
-    LDLR(la3!1,loc~surface).LDL(ldlr!1,loc~extra) -> \\
-        LDLR(la3,loc~surface) \\
-        k_off_surf
+    LDLR(la4,loc~surface) + LDL(ldlr,loc~extra) <-> \\
+        LDLR(la4!1,loc~surface).LDL(ldlr!1,loc~extra) \\
+        k_on_base*strength_LA4, k_off_surf
 
-    #LA4
+    LDLR(la5,loc~surface) + LDL(ldlr,loc~extra) <-> \\
+        LDLR(la5!1,loc~surface).LDL(ldlr!1,loc~extra) \\
+        k_on_base*strength_LA5, k_off_surf
 
-    LDLR(la4,loc~surface) + LDL(ldlr,loc~extra) -> \\
-        LDLR(la4!1,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra) \\
-        k_on_base*strength_LA4
-
-    LDLR(la4!1,loc~surface).LDL(ldlr!1,loc~extra) -> \\
-        LDLR(la4,loc~surface) \\
-        k_off_surf
-    
-    #LA5
-
-    LDLR(la5,loc~surface) + LDL(ldlr,loc~extra) -> \\
-        LDLR(la5!1,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra) \\
-        k_on_base*strength_LA5
-
-    LDLR(la5!1,loc~surface).LDL(ldlr!1,loc~extra) -> \\
-        LDLR(la5,loc~surface) \\
-        k_off_surf
-
-        
-    #LA7
-    LDLR(la7,loc~surface) + LDL(ldlr,loc~extra) -> \\
-        LDLR(la7!1,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra) \\
-        k_on_base*strength_LA7
-
-    LDLR(la7!1,loc~surface).LDL(ldlr!1,loc~extra) -> \\
-        LDLR(la7,loc~surface) \\
-        k_off_surf
+    LDLR(la7,loc~surface) + LDL(ldlr,loc~extra) <-> \\
+        LDLR(la7!1,loc~surface).LDL(ldlr!1,loc~extra) \\
+        k_on_base*strength_LA7, k_off_surf
 
     # Endocytosis
     LDLR(la3!1,loc~surface).LDL(ldlr!1,loc~extra) -> \\
@@ -280,7 +258,7 @@ if __name__ == "__main__":
     wt_model.run()
     
     # Plot results
-    wt_model.plot(save_path='results/figures/ldlr_wt2.png')
+    wt_model.plot(save_path='results/figures/ldlr_wt.png')
     
     # Print summary
     data = wt_model.get_data()
