@@ -13,7 +13,7 @@ build/
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
+#*.ipynb
 
 # BioNetGen outputs
 *.net
