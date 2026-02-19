@@ -276,11 +276,12 @@ end model
 # Example usage
 if __name__ == "__main__":
     # Create and run WT model
+    outdir='ldlr_model1_results'
     wt_model = LDLRModel(variant_name='WT', functional_score=1.0)
-    wt_model.run()
+    wt_model.run(out_dir=outdir)
     
     # Plot results
-    wt_model.plot(save_path='results/figures/ldlr_wt2.png')
+    wt_model.plot(save_path=outdir + '/ldlr_wt2.png')
     
     # Print summary
     data = wt_model.get_data()
