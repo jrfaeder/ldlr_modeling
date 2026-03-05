@@ -1,3 +1,76 @@
+This model considers Functional score (F) and Abundance score (A) onto model parameters differently for each cluster.
+
+1) What files to read
+Main script: models/ldlr_model_a1.py （also in this folder)
+
+This script:  reads variant → (F, A, cluster) from functional_abundance_clusters_k4.csv, generates the bngl file and the figure
+
+2) How I treat each cluster
+All values below than 0 is now treated as 0.01.
+
+
+Cluster 0 (WT-like)
+
+Interpretation: variants behave close to WT; abundance differences not treated as meaningful
+
+Mapping:
+
+A_used = 1.0 (ignore abundance fluctuations)
+
+F_used = F_eff (functional score still used)
+
+
+
+Cluster 2 (abundance-defect)
+
+Interpretation: primary effect is receptor amount (abundance), not functional kinetics
+
+Mapping:
+
+F_used = 1.0 (keep functional kinetics ~WT)
+
+A_used = A_eff and scale initial receptor number:
+
+LDLR_init_scaled = LDLR_init_base * A_used
+
+
+Cluster 3 (functional-defect)
+
+Interpretation: primary effect is functional kinetics, not receptor abundance
+
+Mapping:
+
+F_used = F_eff (scale binding/functional behavior)
+
+A_used = 1.0 (keep abundance WT)
+
+
+Cluster 1 (near-null)
+
+Interpretation: severe behavior (both scores very low)
+
+Mapping:
+
+force minimal activity and abundance:
+
+F_used = 0.01
+
+A_used = 0.01
+
+
+3) Where F and A enter the model
+
+A (abundance) → receptor count:
+LDLR_init_scaled = round(LDLR_init_base * A_used)
+
+F (functional) → binding:
+binding_strength = max(F_used, 0.01)
+and then
+k_off_surf = 1.0 / binding_strength
+So higher F reduces dissociation (stronger binding), and lower F increases dissociation (weaker binding).
+
+
+4) Four examples in this folder: 
 Gly2Trp is an example of Cluster 0
 Gly2Ter is an example of Cluster 1
 Gly2Leu is an example of Cluster 3
