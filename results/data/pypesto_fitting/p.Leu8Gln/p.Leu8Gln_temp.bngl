@@ -1,0 +1,123 @@
+
+# LDLR Model - p.Leu8Gln
+# Cluster: 2
+# Parameter fitting mode: base parameters only
+
+begin model
+
+begin parameters
+    # Binding / uptake-side
+    k_on_base          1.000000
+    k_off_surf         9.027485
+    k_off_endo         36.929042
+    k_endo             18.755711
+
+    # Module strengths
+    strength_LA3       1.0
+    strength_LA4       1.0
+    strength_LA5       1.0
+    strength_LA7       0.8
+
+    # Trafficking / degradation parameters
+    k_recycle_ldlr     8.183793
+    k_lyso_ldl         22.699860
+    k_degrade_ldl      12.839079
+
+    # Initial supply
+    LDLR_init          1048
+    LDL_conc           100
+end parameters
+
+begin functions
+  k_on_LA3() = k_on_base*strength_LA3
+  k_on_LA4() = k_on_base*strength_LA4
+  k_on_LA5() = k_on_base*strength_LA5
+  k_on_LA7() = k_on_base*strength_LA7
+end functions
+
+begin molecule types
+    LDLR(la3,la4,la5,la7,loc~surface~endosome)
+    LDL(ldlr,loc~extra~endo~lyso)
+end molecule types
+
+begin seed species
+    LDLR(la3,la4,la5,la7,loc~surface)  LDLR_init
+    LDL(ldlr,loc~extra)  LDL_conc
+end seed species
+
+begin observables
+    Molecules  LDLR_surface      LDLR(loc~surface)
+    Molecules  LDLR_endosome     LDLR(loc~endosome)
+    Molecules  LDL_free          LDL(ldlr,loc~extra)
+    Molecules  LDL_endo          LDL(ldlr,loc~endo)
+    Molecules  LDL_lyso          LDL(ldlr,loc~lyso)
+    Molecules  Surf_LA3          LDLR(la3!+,loc~surface)
+    Molecules  Surf_LA4          LDLR(la4!+,loc~surface)
+    Molecules  Surf_LA5          LDLR(la5!+,loc~surface)
+    Molecules  Surf_LA7          LDLR(la7!+,loc~surface)
+end observables
+
+begin reaction rules
+    # Surface binding / unbinding
+    LDLR(la3,la4,la5,la7,loc~surface) + LDL(ldlr,loc~extra) -> \
+        LDLR(la3!1,la4,la5,la7,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra) \
+        k_on_LA3()
+    LDLR(la3!1,la4,la5,la7,loc~surface).LDL(ldlr!1,loc~extra) -> \
+        LDLR(la3,la4,la5,la7,loc~surface) \
+        k_off_surf
+
+    LDLR(la3,la4,la5,la7,loc~surface) + LDL(ldlr,loc~extra) -> \
+        LDLR(la3,la4!1,la5,la7,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra) \
+        k_on_LA4()
+    LDLR(la3,la4!1,la5,la7,loc~surface).LDL(ldlr!1,loc~extra) -> \
+        LDLR(la3,la4,la5,la7,loc~surface) \
+        k_off_surf
+
+    LDLR(la3,la4,la5,la7,loc~surface) + LDL(ldlr,loc~extra) -> \
+        LDLR(la3,la4,la5!1,la7,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra) \
+        k_on_LA5()
+    LDLR(la3,la4,la5!1,la7,loc~surface).LDL(ldlr!1,loc~extra) -> \
+        LDLR(la3,la4,la5,la7,loc~surface) \
+        k_off_surf
+
+    LDLR(la3,la4,la5,la7,loc~surface) + LDL(ldlr,loc~extra) -> \
+        LDLR(la3,la4,la5,la7!1,loc~surface).LDL(ldlr!1,loc~extra) + LDL(ldlr,loc~extra)\
+        k_on_LA7()
+    LDLR(la3,la4,la5,la7!1,loc~surface).LDL(ldlr!1,loc~extra) -> \
+        LDLR(la3,la4,la5,la7,loc~surface) \
+        k_off_surf
+
+    # Endocytosis
+    LDLR(la3!1,la4,la5,la7,loc~surface).LDL(ldlr!1,loc~extra) -> \
+        LDLR(la3!1,la4,la5,la7,loc~endosome).LDL(ldlr!1,loc~endo)  k_endo
+    LDLR(la3,la4!1,la5,la7,loc~surface).LDL(ldlr!1,loc~extra) -> \
+        LDLR(la3,la4!1,la5,la7,loc~endosome).LDL(ldlr!1,loc~endo)  k_endo
+    LDLR(la3,la4,la5!1,la7,loc~surface).LDL(ldlr!1,loc~extra) -> \
+        LDLR(la3,la4,la5!1,la7,loc~endosome).LDL(ldlr!1,loc~endo)  k_endo
+    LDLR(la3,la4,la5,la7!1,loc~surface).LDL(ldlr!1,loc~extra) -> \
+        LDLR(la3,la4,la5,la7!1,loc~endosome).LDL(ldlr!1,loc~endo)  k_endo
+
+    # Endosomal release
+    LDLR(la3!1,la4,la5,la7,loc~endosome).LDL(ldlr!1,loc~endo) -> \
+        LDLR(la3,la4,la5,la7,loc~endosome) + LDL(ldlr,loc~endo)  k_off_endo
+    LDLR(la3,la4!1,la5,la7,loc~endosome).LDL(ldlr!1,loc~endo) -> \
+        LDLR(la3,la4,la5,la7,loc~endosome) + LDL(ldlr,loc~endo)  k_off_endo
+    LDLR(la3,la4,la5!1,la7,loc~endosome).LDL(ldlr!1,loc~endo) -> \
+        LDLR(la3,la4,la5,la7,loc~endosome) + LDL(ldlr,loc~endo)  k_off_endo
+    LDLR(la3,la4,la5,la7!1,loc~endosome).LDL(ldlr!1,loc~endo) -> \
+        LDLR(la3,la4,la5,la7,loc~endosome) + LDL(ldlr,loc~endo)  k_off_endo
+
+    # Receptor-side recycling
+    LDLR(la3,la4,la5,la7,loc~endosome) -> \
+        LDLR(la3,la4,la5,la7,loc~surface)  k_recycle_ldlr
+
+    # LDL cargo-side lysosomal routing / degradation
+    LDL(ldlr,loc~endo) -> LDL(ldlr,loc~lyso)  k_lyso_ldl
+    LDL(ldlr,loc~lyso) -> 0  k_degrade_ldl
+
+end reaction rules
+
+end model
+
+generate_network({overwrite=>1})
+simulate({method=>"ode", t_end=>200, n_steps=>1000})
