@@ -1,0 +1,540 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level2/version3" level="2" version="3">
+  <model id="temp">
+    <listOfUnitDefinitions>
+      <unitDefinition id="substance" name="substance">
+        <listOfUnits>
+          <unit kind="item" exponent="1" multiplier="1"/>
+        </listOfUnits>
+      </unitDefinition>
+    </listOfUnitDefinitions>
+    <listOfCompartments>
+      <compartment id="cell" size="1"/>
+    </listOfCompartments>
+    <listOfSpecies>
+      <species id="S1" compartment="cell" initialAmount="1000" name="LDLR(la3,la4,la5,la7,loc~surface)"/>
+      <species id="S2" compartment="cell" initialAmount="100" name="LDL(ldlr,loc~extra)"/>
+      <species id="S3" compartment="cell" initialAmount="0" name="LDL(ldlr!1,loc~extra).LDLR(la3!1,la4,la5,la7,loc~surface)"/>
+      <species id="S4" compartment="cell" initialAmount="0" name="LDL(ldlr!1,loc~extra).LDLR(la3,la4!1,la5,la7,loc~surface)"/>
+      <species id="S5" compartment="cell" initialAmount="0" name="LDL(ldlr!1,loc~extra).LDLR(la3,la4,la5!1,la7,loc~surface)"/>
+      <species id="S6" compartment="cell" initialAmount="0" name="LDL(ldlr!1,loc~extra).LDLR(la3,la4,la5,la7!1,loc~surface)"/>
+      <species id="S7" compartment="cell" initialAmount="0" name="LDL(ldlr!1,loc~endo).LDLR(la3!1,la4,la5,la7,loc~endosome)"/>
+      <species id="S8" compartment="cell" initialAmount="0" name="LDL(ldlr!1,loc~endo).LDLR(la3,la4!1,la5,la7,loc~endosome)"/>
+      <species id="S9" compartment="cell" initialAmount="0" name="LDL(ldlr!1,loc~endo).LDLR(la3,la4,la5!1,la7,loc~endosome)"/>
+      <species id="S10" compartment="cell" initialAmount="0" name="LDL(ldlr!1,loc~endo).LDLR(la3,la4,la5,la7!1,loc~endosome)"/>
+      <species id="S11" compartment="cell" initialAmount="0" name="LDLR(la3,la4,la5,la7,loc~endosome)"/>
+      <species id="S12" compartment="cell" initialAmount="0" name="LDL(ldlr,loc~endo)"/>
+      <species id="S13" compartment="cell" initialAmount="0" name="LDL(ldlr,loc~lyso)"/>
+    </listOfSpecies>
+    <listOfParameters>
+      <!-- Independent variables -->
+      <parameter id="k_on_base" value="1"/>
+      <parameter id="k_off_surf" value="1"/>
+      <parameter id="k_off_endo" value="50"/>
+      <parameter id="k_endo" value="2"/>
+      <parameter id="strength_LA3" value="1"/>
+      <parameter id="strength_LA4" value="1"/>
+      <parameter id="strength_LA5" value="1"/>
+      <parameter id="strength_LA7" value="0.8"/>
+      <parameter id="k_recycle_ldlr" value="3"/>
+      <parameter id="k_lyso_ldl" value="3"/>
+      <parameter id="k_degrade_ldl" value="5"/>
+      <parameter id="LDLR_init" value="1000"/>
+      <parameter id="LDL_conc" value="100"/>
+      <!-- Observables -->
+      <parameter id="LDLR_surface" constant="false"/>
+      <parameter id="LDLR_endosome" constant="false"/>
+      <parameter id="LDL_free" constant="false"/>
+      <parameter id="LDL_endo" constant="false"/>
+      <parameter id="LDL_lyso" constant="false"/>
+      <parameter id="Surf_LA3" constant="false"/>
+      <parameter id="Surf_LA4" constant="false"/>
+      <parameter id="Surf_LA5" constant="false"/>
+      <parameter id="Surf_LA7" constant="false"/>
+      <!-- Global functions -->
+      <parameter id="k_on_LA3" constant="false"/>
+      <parameter id="k_on_LA4" constant="false"/>
+      <parameter id="k_on_LA5" constant="false"/>
+      <parameter id="k_on_LA7" constant="false"/>
+    </listOfParameters>
+    <listOfInitialAssignments>
+      <!-- All initial values -->
+      <initialAssignment symbol="S1">
+        <math xmlns="http://www.w3.org/1998/Math/MathML">
+          <ci> LDLR_init </ci>
+        </math>
+      </initialAssignment>
+      <initialAssignment symbol="S2">
+        <math xmlns="http://www.w3.org/1998/Math/MathML">
+          <ci> LDL_conc </ci>
+        </math>
+      </initialAssignment>
+    </listOfInitialAssignments>
+    <listOfRules>
+      <!-- Observables -->
+      <assignmentRule variable="LDLR_surface">
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <plus/>
+              <ci> S1 </ci>
+              <ci> S3 </ci>
+              <ci> S4 </ci>
+              <ci> S5 </ci>
+              <ci> S6 </ci>
+            </apply>
+          </math>
+      </assignmentRule>
+      <assignmentRule variable="LDLR_endosome">
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <plus/>
+              <ci> S7 </ci>
+              <ci> S8 </ci>
+              <ci> S9 </ci>
+              <ci> S10 </ci>
+              <ci> S11 </ci>
+            </apply>
+          </math>
+      </assignmentRule>
+      <assignmentRule variable="LDL_free">
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <plus/>
+              <cn> 0 </cn>
+              <ci> S2 </ci>
+            </apply>
+          </math>
+      </assignmentRule>
+      <assignmentRule variable="LDL_endo">
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <plus/>
+              <cn> 0 </cn>
+              <ci> S12 </ci>
+            </apply>
+          </math>
+      </assignmentRule>
+      <assignmentRule variable="LDL_lyso">
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <plus/>
+              <cn> 0 </cn>
+              <ci> S13 </ci>
+            </apply>
+          </math>
+      </assignmentRule>
+      <assignmentRule variable="Surf_LA3">
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <plus/>
+              <cn> 0 </cn>
+              <ci> S3 </ci>
+            </apply>
+          </math>
+      </assignmentRule>
+      <assignmentRule variable="Surf_LA4">
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <plus/>
+              <cn> 0 </cn>
+              <ci> S4 </ci>
+            </apply>
+          </math>
+      </assignmentRule>
+      <assignmentRule variable="Surf_LA5">
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <plus/>
+              <cn> 0 </cn>
+              <ci> S5 </ci>
+            </apply>
+          </math>
+      </assignmentRule>
+      <assignmentRule variable="Surf_LA7">
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <plus/>
+              <cn> 0 </cn>
+              <ci> S6 </ci>
+            </apply>
+          </math>
+      </assignmentRule>
+      <!-- Global functions -->
+      <assignmentRule variable="k_on_LA3">
+        <math xmlns="http://www.w3.org/1998/Math/MathML">
+          <apply>
+            <times/>
+            <ci> k_on_base </ci>
+            <ci> strength_LA3 </ci>
+          </apply>
+        </math>
+      </assignmentRule>
+      <assignmentRule variable="k_on_LA4">
+        <math xmlns="http://www.w3.org/1998/Math/MathML">
+          <apply>
+            <times/>
+            <ci> k_on_base </ci>
+            <ci> strength_LA4 </ci>
+          </apply>
+        </math>
+      </assignmentRule>
+      <assignmentRule variable="k_on_LA5">
+        <math xmlns="http://www.w3.org/1998/Math/MathML">
+          <apply>
+            <times/>
+            <ci> k_on_base </ci>
+            <ci> strength_LA5 </ci>
+          </apply>
+        </math>
+      </assignmentRule>
+      <assignmentRule variable="k_on_LA7">
+        <math xmlns="http://www.w3.org/1998/Math/MathML">
+          <apply>
+            <times/>
+            <ci> k_on_base </ci>
+            <ci> strength_LA7 </ci>
+          </apply>
+        </math>
+      </assignmentRule>
+    </listOfRules>
+    <listOfReactions>
+      <reaction id="R1" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S1"/>
+          <speciesReference species="S2"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S2"/>
+          <speciesReference species="S3"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_on_LA3 </ci>
+              <ci> S1 </ci>
+              <ci> S2 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R2" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S1"/>
+          <speciesReference species="S2"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S2"/>
+          <speciesReference species="S4"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_on_LA4 </ci>
+              <ci> S1 </ci>
+              <ci> S2 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R3" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S1"/>
+          <speciesReference species="S2"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S2"/>
+          <speciesReference species="S5"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_on_LA5 </ci>
+              <ci> S1 </ci>
+              <ci> S2 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R4" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S1"/>
+          <speciesReference species="S2"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S2"/>
+          <speciesReference species="S6"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_on_LA7 </ci>
+              <ci> S1 </ci>
+              <ci> S2 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R5" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S3"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S1"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_off_surf </ci>
+              <ci> S3 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R6" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S4"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S1"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_off_surf </ci>
+              <ci> S4 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R7" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S5"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S1"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_off_surf </ci>
+              <ci> S5 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R8" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S6"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S1"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_off_surf </ci>
+              <ci> S6 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R9" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S3"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S7"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_endo </ci>
+              <ci> S3 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R10" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S4"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S8"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_endo </ci>
+              <ci> S4 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R11" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S5"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S9"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_endo </ci>
+              <ci> S5 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R12" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S6"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S10"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_endo </ci>
+              <ci> S6 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R13" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S7"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S11"/>
+          <speciesReference species="S12"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_off_endo </ci>
+              <ci> S7 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R14" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S8"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S11"/>
+          <speciesReference species="S12"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_off_endo </ci>
+              <ci> S8 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R15" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S9"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S11"/>
+          <speciesReference species="S12"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_off_endo </ci>
+              <ci> S9 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R16" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S10"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S11"/>
+          <speciesReference species="S12"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_off_endo </ci>
+              <ci> S10 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R17" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S11"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S1"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_recycle_ldlr </ci>
+              <ci> S11 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R18" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S12"/>
+        </listOfReactants>
+        <listOfProducts>
+          <speciesReference species="S13"/>
+        </listOfProducts>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_lyso_ldl </ci>
+              <ci> S12 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+      <reaction id="R19" reversible="false">
+        <listOfReactants>
+          <speciesReference species="S13"/>
+        </listOfReactants>
+        <kineticLaw>
+          <math xmlns="http://www.w3.org/1998/Math/MathML">
+            <apply>
+              <times/>
+              <ci> k_degrade_ldl </ci>
+              <ci> S13 </ci>
+            </apply>
+          </math>
+        </kineticLaw>
+      </reaction>
+    </listOfReactions>
+  </model>
+</sbml>

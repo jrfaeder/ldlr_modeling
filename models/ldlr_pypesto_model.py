@@ -84,6 +84,11 @@ class LDLRModelForFitting:
         self.result = None
         self.last_simulation_data = None
 
+        # Cache for efficient simulation
+        self.simulator = None
+        self._model_loaded = False
+        self.result_array = None
+
     def get_model_parameters(self, params_dict):
         """
         Get model parameters directly from the parameter dictionary.
@@ -270,6 +275,35 @@ end reaction rules
 end model
 """
 
+    def _initialize_simulator(self, params_dict):
+        """
+        Initialize the BioNetGen model and simulator (called once).
+
+        Parameters
+        ----------
+        params_dict : dict
+            Dictionary of base parameters
+        """
+        # Get model parameters for this variant
+        model_params = self.get_model_parameters(params_dict)
+
+        # Generate the BNGL model string
+        model_str = self.get_model_string(model_params)
+
+        # Write BNGL file
+        bngl_filename = f"{self.variant_name}_fitting.bngl"
+        bngl_path = self.work_dir / bngl_filename
+        with open(bngl_path, "w") as f:
+            f.write(model_str)
+
+        # Load model and create simulator
+        # Change to work_dir so bionetgen can find the file
+        with pushd(self.work_dir):
+            self.model = bionetgen.bngmodel(bngl_filename)
+            self.simulator = self.model.setup_simulator()
+
+        self._model_loaded = True
+
     def simulate(self, params_dict, t_end=200, n_steps=1000):
         """
         Run simulation with given parameters.
@@ -288,52 +322,62 @@ end model
         dict
             Simulation metrics including final_uptake, final_surface, etc.
         """
+        # Initialize simulator on first call
+        if not self._model_loaded:
+            self._initialize_simulator(params_dict)
+
         # Get model parameters
         model_params = self.get_model_parameters(params_dict)
 
-        # Create model string
-        model_string = self.get_model_string(model_params)
+        # Set parameters in simulator
+        for param_name, value in model_params.items():
+            if param_name == "LDLR_init":
+                # Skip initial conditions - handled separately
+                continue
+            try:
+                self.simulator[param_name] = value
+            except:
+                pass  # Parameter might not exist or be settable
 
-        # Set up temporary file
-        run_dir = self.work_dir / self.variant_name
-        run_dir.mkdir(parents=True, exist_ok=True)
-
-        temp_model_file = run_dir / f"{self.variant_name}_temp.bngl"
-
-        with open(temp_model_file, "w") as f:
-            f.write(model_string)
-            f.write("\ngenerate_network({overwrite=>1})\n")
-            f.write(f"simulate({{method=>\"ode\", t_end=>{t_end}, n_steps=>{n_steps}}})\n")
+        # Reset simulator
+        self.simulator.reset()
 
         # Run simulation
-        with pushd(run_dir):
-            self.result = bionetgen.run(temp_model_file.name, out=".", suppress=True)
+        observables = [o for o in self.model.observables]
+        selections = ['time'] + observables
+        result_array = self.simulator.simulate(0, t_end, n_steps, selections=selections)
+
+        # Store result array for extraction
+        self.result_array = result_array
 
         # Extract results
         return self._extract_metrics()
 
     def _extract_metrics(self):
         """Extract metrics from simulation results."""
-        if self.result is None:
+        if self.result_array is None:
             raise ValueError("Must run simulation first")
 
-        # Get the data
-        model_name = list(self.result.gdats.keys())[0]
-        gdat_array = self.result.gdats[model_name]
-        df = pd.DataFrame(gdat_array)
+        # Get observables list from model
+        observables = [o for o in self.model.observables]
 
-        # Calculate internalized LDL
-        endo_cols = [c for c in df.columns if c.lower() == "ldl_endo"]
-        lyso_cols = [c for c in df.columns if c.lower() == "ldl_lyso"]
+        # Create column names: ['time'] + observables
+        columns = ['time'] + observables
 
-        if not endo_cols or not lyso_cols:
-            raise KeyError("No endosome or lysosome columns found in GDAT!")
+        # Convert result array to DataFrame
+        df = pd.DataFrame(self.result_array, columns=columns)
 
-        df["LDL_internalized"] = df[endo_cols].sum(axis=1) + df[lyso_cols].sum(axis=1)
+        # Calculate internalized LDL (add as column for plotting)
+        # LDL_endo and LDL_lyso are observables in the model
+        df["LDL_internalized"] = df["LDL_endo"] + df["LDL_lyso"]
 
         # Get final values
+        final_endo = float(df["LDL_endo"].iloc[-1])
+        final_lyso = float(df["LDL_lyso"].iloc[-1])
+        final_uptake = final_endo + final_lyso
+
+        # Get final surface value
         final_surface = float(df["LDLR_surface"].iloc[-1])
-        final_uptake = float(df["LDL_internalized"].iloc[-1])
 
         # Calculate ratios vs WT
         surface_ratio = final_surface / WT_SURFACE_SS
@@ -446,3 +490,110 @@ def create_objective_function(
             return 1e10
 
     return objective, model
+
+
+def create_objective_function_log_scale(
+    variant_name,
+    target_functional_score,
+    target_abundance_score,
+    cluster=0,
+    work_dir=None,
+    weight_functional=1.0,
+    weight_abundance=1.0,
+):
+    """
+    Create a pypesto-compatible objective function that operates in LOG SPACE.
+
+    This improves optimization for parameters spanning multiple orders of magnitude.
+    The optimizer works with log10(parameters), which are then transformed back
+    to linear scale before simulation.
+
+    This function fits model BASE parameters to match BOTH target functional and abundance scores.
+    The scores are OUTPUTS from the model (surface_ratio and uptake_ratio), not inputs.
+
+    Parameters
+    ----------
+    variant_name : str
+        Name of the variant
+    target_functional_score : float
+        Target functional score to fit (uptake_ratio relative to WT)
+    target_abundance_score : float
+        Target abundance score to fit (surface_ratio relative to WT)
+    cluster : int
+        Cluster assignment (0, 1, 2, or 3)
+    work_dir : str or Path, optional
+        Working directory for simulations
+    weight_functional : float, optional
+        Weight for functional score in objective (default 1.0)
+    weight_abundance : float, optional
+        Weight for abundance score in objective (default 1.0)
+
+    Returns
+    -------
+    tuple
+        (objective_function, model) where objective_function takes LOG-SCALE parameter vector
+        and returns weighted sum of squared errors
+    """
+    model = LDLRModelForFitting(
+        variant_name=variant_name,
+        cluster=cluster,
+        work_dir=work_dir,
+    )
+
+    def objective_log(log_params_vector):
+        """
+        Objective function for pypesto operating in log space.
+
+        Parameters
+        ----------
+        log_params_vector : array-like
+            LOG10-scaled parameter vector with order:
+            [log10(LDLR_init_base), log10(k_endo_base), log10(k_off_endo_base),
+             log10(k_recycle_ldlr_base), log10(k_lyso_ldl_base),
+             log10(k_degrade_ldl_base), log10(k_off_surf)]
+
+        Returns
+        -------
+        float
+            Weighted sum of squared errors for both functional and abundance scores
+        """
+        # Transform from log space to linear space
+        params_vector = 10 ** log_params_vector
+
+        # Create parameter dictionary
+        param_names = [
+            'LDLR_init_base',
+            'k_endo_base',
+            'k_off_endo_base',
+            'k_recycle_ldlr_base',
+            'k_lyso_ldl_base',
+            'k_degrade_ldl_base',
+            'k_off_surf',
+        ]
+
+        params_dict = dict(zip(param_names, params_vector))
+
+        try:
+            # Run simulation
+            metrics = model.simulate(params_dict)
+
+            # Calculate errors for both scores
+            # Functional score = uptake_ratio (final uptake / WT uptake)
+            predicted_functional = metrics['uptake_ratio']
+            error_functional = weight_functional * (predicted_functional - target_functional_score) ** 2
+
+            # Abundance score = surface_ratio (final surface / WT surface)
+            predicted_abundance = metrics['surface_ratio']
+            error_abundance = weight_abundance * (predicted_abundance - target_abundance_score) ** 2
+
+            # Total error (weighted sum of squared errors)
+            total_error = error_functional + error_abundance
+
+            return total_error
+
+        except Exception as e:
+            # Return large penalty if simulation fails
+            print(f"Simulation failed: {e}")
+            return 1e10
+
+    return objective_log, model

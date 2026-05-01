@@ -1,0 +1,22 @@
+Variant: p.Leu8Gln
+Cluster: 2
+
+Target scores:
+  Target functional score (uptake ratio): 0.65
+  Target abundance score (surface ratio): 0.8
+
+Best fit metrics:
+  Predicted functional score: 0.650000
+  Functional error: 0.000000
+  Predicted abundance score: 0.800000
+  Abundance error: 0.000000
+
+Simulation outputs:
+  Final uptake: 404.30
+  Final surface: 470.29
+
+Optimization:
+  Total objective value: 0.00000000
+  RMSE: 0.00000020
+  Weight functional: 1.0
+  Weight abundance: 1.0

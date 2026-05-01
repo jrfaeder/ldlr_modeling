@@ -8,9 +8,9 @@ begin model
 begin parameters
     # Binding / uptake-side
     k_on_base          1.000000
-    k_off_surf         0.818621
-    k_off_endo         97.486707
-    k_endo             0.911293
+    k_off_surf         1.000000
+    k_off_endo         50.000000
+    k_endo             2.000000
 
     # Module strengths
     strength_LA3       1.0
@@ -19,12 +19,12 @@ begin parameters
     strength_LA7       0.8
 
     # Trafficking / degradation parameters
-    k_recycle_ldlr     6.953647
-    k_lyso_ldl         0.551405
-    k_degrade_ldl      1.260025
+    k_recycle_ldlr     3.000000
+    k_lyso_ldl         3.000000
+    k_degrade_ldl      5.000000
 
     # Initial supply
-    LDLR_init          2623
+    LDLR_init          1000
     LDL_conc           100
 end parameters
 
@@ -118,6 +118,3 @@ begin reaction rules
 end reaction rules
 
 end model
-
-generate_network({overwrite=>1})
-simulate({method=>"ode", t_end=>200, n_steps=>1000})
