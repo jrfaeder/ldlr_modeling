@@ -31,8 +31,7 @@ IMPORTANT MODEL FEATURES IN THIS VERSION
    - k_endo
    - k_off_surf
 
-5. Cluster 2 rescue remains REMOVED entirely.
-   Cluster 2 uses raw A directly, while F_used=1.0 under the cluster logic.
+5. Cluster 2 uses raw A directly, while F_used=1.0 under the cluster logic.
 
 6. NEW IN A8:
    Optional param_overrides can directly replace any computed parameter after
