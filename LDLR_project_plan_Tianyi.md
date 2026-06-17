@@ -1,0 +1,254 @@
+# Project plan: mapping LDLR missense variant scores to mechanistic model parameters
+
+**Audience:** Tianyi
+**Background:** We want to learn the rules that translate amino-acid substitutions in LDLR into perturbations of specific kinetic parameters in our LDL uptake and trafficking model. Tabet et al. (*Science*, October 2025) just released a deep mutational scanning dataset of ~17,000 LDLR missense variants with paired readouts: LDL uptake and LDLR surface abundance. Tabet also reports an LDL-uptake-with-VLDL arm; for this project we will work with just the two primary readouts (uptake without VLDL, and surface abundance) and treat the VLDL-competition data as out of scope for now. See the "scope note" at the end of Phase 0 for the implications. Our current approach has been to read off variant-to-parameter rules manually. The plan below builds a more systematic pipeline in phases, starting from a sanity check on our model and ending at a defensible variant-to-parameter mapping with uncertainty.
+
+---
+
+## Phase 0: pressure-test the mechanistic model
+
+Before we touch the Tabet data, I want you to validate that our LDLR cycling model has the structure to represent *abundance effects* and *binding effects* as independent perturbations. The Tabet measurements give us two largely orthogonal phenotypes (surface abundance and per-receptor uptake). If our model collapses these into a single "function" parameter, we can't fit them separately and the rest of this plan won't work.
+
+Sit down with Claude (or another current-generation AI assistant — they're genuinely useful for this kind of model-structure conversation) and walk through each parameter in our current BNGL model. For each one, write down:
+
+1. **What it represents physically**: a synthesis rate? A degradation rate? A binding affinity? An internalization step?
+2. **Which Tabet readout it should affect**: surface abundance (S) or per-receptor LDL uptake (B) — or both, with a defensible coupling.
+3. **Whether a variant could in principle disrupt this parameter without affecting the other**.
+
+Then specifically check that the model has:
+
+- A parameter (or coupled set) that drives **steady-state surface abundance**. If a variant reduces synthesis, accelerates degradation, or impairs ER-to-surface trafficking, the model should produce a lower surface receptor count at steady state without necessarily affecting per-receptor uptake competence.
+- A parameter that controls **LDL-binding affinity** (or on/off rates) independently from abundance. β-propeller and NPxY variants in particular hit per-receptor uptake without hitting abundance — we need to be able to represent that.
+- A step corresponding to **pH-dependent release in the endosome** (the β-propeller's role per Brown & Goldstein and the recent ApoB100 structural work). If the model lumps internalization and dissociation together, β-propeller variants will be indistinguishable from binding-domain variants in our fits.
+- A **clathrin-mediated internalization step** (relevant for NPxY motif variants). If the model treats internalization as a passive consequence of binding rather than an explicit rate, NPxY effects can't be cleanly assigned.
+
+**Deliverable at end of Phase 0:** A one-page document with the current model schematic, a table of every parameter named with its physical meaning, and a column showing which Tabet readout(s) would best inform each parameter. If gaps in the model show up during this exercise (e.g., we don't have an explicit endosomal dissociation step, or stability and trafficking aren't separable), flag them and we'll decide whether to extend the model before proceeding. Bring this to me before moving on — this is the gate to the rest of the work.
+
+Budget about a week, mostly thinking time rather than coding.
+
+### Scope note: LA2 and LA6
+
+Because we're not using the VLDL arm of Tabet's data, LA2 and LA6 (about 120 residues collectively) will look like tolerant, near-neutral regions of the protein in our analysis. In Tabet's measurements without VLDL, only ~8% of LA2/LA6 missense variants show reduced LDL uptake, compared to ~38% in LA3-5 and LA7. The LA2/LA6 substitutions that *do* matter only become visible under VLDL competition, which we're setting aside.
+
+The implication for rule-learning is that LA2 and LA6 should be treated as a known blind spot, not as evidence that LA-module substitutions have weak binding effects. In Phases 4 and 5 we'll either exclude LA2 and LA6 from binding-rule learning or model them as a separate category whose binding parameter is unidentified given our data. Don't let LA2/LA6 variants get silently lumped into the LA-module binding training set — the wrong inference there would propagate downstream. Adding the VLDL arm to capture LA2/LA6 specifically is a defensible follow-up paper.
+
+---
+
+## Phase 1: ingest the Tabet data and reproduce their headline statistics
+
+Download Tabet's supplementary tables (the supplement to *Science* 10.1126/science.ady7186 has Data S1 through S8 plus Tables S1 through S6). The ones we care about for this project are:
+
+- The functional scores for LDL uptake without VLDL (their primary function map).
+- The cell-surface abundance scores.
+
+You don't need the with-VLDL data for the modeling work, but pull it anyway — we may want to spot-check our LA2/LA6 blind-spot assumption against their values, and it's the same data download.
+
+Load the two primary tables into a single pandas DataFrame keyed on (position, wild-type residue, variant residue). Confirm you can reproduce a few of the paper's headline numbers as a sanity check that we have the right files and our processing is correct:
+
+- The reported correlation r ≈ 0.84 between abundance and function in LA modules 1–6 (after excluding 7).
+- The bimodal distribution of functional scores aligning with synonymous (~1) and nonsense (~0) modes.
+- The depletion of low-scoring variants at high MAF in UK Biobank.
+
+Don't move on until these reproduce within rounding. If they don't, we have a data-processing problem to fix first.
+
+**Starter notebook**: `phase1_starter.ipynb` (provided separately) covers the data ingest, sanity checks, derived-score computation and the first Phase 3 plots in a single runnable file. Start there and modify as needed.
+
+**Deliverable at end of Phase 1:** A notebook with the merged DataFrame and 2-3 figures that recapitulate Tabet's Fig. 1D, 1E and the abundance-vs-function correlation. Budget two to three days.
+
+---
+
+## Phase 2: compute the two derived scores
+
+This is the analytic decomposition. For each variant we define:
+
+- **S = surface abundance score** (taken directly from Tabet's abundance map).
+- **B = per-receptor LDL binding/uptake score**, computed as the residual of uptake-without-VLDL after regressing out abundance. Practically: fit a smooth regression (LOESS or a low-order spline) of uptake on abundance across all variants, then take the residual. Variants where uptake is worse than abundance alone would predict get negative B.
+
+Be careful with the residualization step. A linear residual in linear space implicitly assumes uptake is linear in abundance, which is probably not right at the extremes (a receptor at 10% surface abundance doesn't produce 10% uptake — there's probably a saturating relationship). A safer first pass is to compute things in log space, but for the exploration phase the simple linear residual is fine. We'll revisit this in Phase 5 when we move to a proper joint model that doesn't rely on the residualization decoupling.
+
+**Deliverable at end of Phase 2:** The DataFrame extended with columns for S and B, plus a short methods writeup of the residualization choices and their assumptions. Budget two days.
+
+---
+
+## Phase 3: visualize and structurally sense-check
+
+This is where you look at the data carefully. Make at least these five plots:
+
+1. **Marginal distributions** of S and B, stratified by structural domain (LA1–LA7, β-propeller, EGF-A/B/C, transmembrane, NPxY). Violin or ridgeline plots, one per score, faceted by domain. Pay attention to whether LA2 and LA6 look distinctively flat compared to LA3-5 — they should, and that's the visual signature of our blind spot.
+
+   To make the plot-type choice concrete: a *violin* plot puts a vertical mirrored kernel density estimate at each category along the x-axis, with a small white dot at the median; a *ridgeline* (or "joyplot") plot lays the same densities horizontally and stacks them vertically with deliberate overlap. Both show the same information; pick whichever reads more cleanly for the number of domains we end up with. The schematic below illustrates the two layouts for the kind of pattern you'd expect from Tabet's data — narrow, near-zero distributions for LA2 (the blind-spot category, where most variants look neutral in our framework), wider and more skewed distributions for the LA3/LA5/LA7 binding-domain modules, a unimodal but broader distribution for the β-propeller, and a clearly bimodal pattern for the small NPxY motif.
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 410" width="100%" style="max-width:760px;display:block;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" aria-label="Violin and ridgeline plots of binding score B by structural domain">
+  <style>
+    .label { fill: #1a1a1a; }
+    .tick { fill: #5a5a5a; }
+    .grid { stroke: #e0e0e0; stroke-width: 0.5; fill: none; }
+    .zero { stroke: #9a9a9a; stroke-width: 0.5; stroke-dasharray: 2,2; fill: none; }
+    .axis { stroke: #9a9a9a; stroke-width: 0.5; fill: none; }
+    .violin, .ridge { fill: #B5D4F4; stroke: #185FA5; stroke-width: 1; }
+    .median { fill: #ffffff; stroke: #0C447C; stroke-width: 0.8; }
+    .panel-title { fill: #5a5a5a; font-size: 13px; }
+    @media (prefers-color-scheme: dark) {
+      .label { fill: #e8e8e8; }
+      .tick { fill: #a8a8a8; }
+      .grid { stroke: #3a3a3a; }
+      .zero, .axis { stroke: #6a6a6a; }
+      .violin, .ridge { fill: #185FA5; stroke: #85B7EB; }
+      .median { fill: #E6F1FB; stroke: #042C53; }
+      .panel-title { fill: #a8a8a8; }
+    }
+  </style>
+  <text x="180" y="20" text-anchor="middle" class="panel-title">Violin plot</text>
+  <text x="560" y="20" text-anchor="middle" class="panel-title">Ridgeline plot</text>
+  <g transform="translate(0, 25)">
+    <line x1="50" y1="320.0" x2="340" y2="320.0" class="grid"/>
+    <text x="42" y="323.5" text-anchor="end" font-size="11" class="tick">-1.0</text>
+    <line x1="50" y1="216.7" x2="340" y2="216.7" class="grid"/>
+    <text x="42" y="220.2" text-anchor="end" font-size="11" class="tick">-0.5</text>
+    <line x1="50" y1="113.3" x2="340" y2="113.3" class="zero"/>
+    <text x="42" y="116.8" text-anchor="end" font-size="11" class="tick">0.0</text>
+    <line x1="50" y1="10.0" x2="340" y2="10.0" class="grid"/>
+    <text x="42" y="13.5" text-anchor="end" font-size="11" class="tick">0.5</text>
+    <line x1="50" y1="10" x2="50" y2="320" class="axis"/>
+    <text x="16" y="165.0" text-anchor="middle" font-size="12" class="label" transform="rotate(-90 16 165.0)">B score</text>
+    <path d="M 74.17 320.0 L 74.17 316.1 L 74.17 312.2 L 74.17 308.2 L 74.17 304.3 L 74.17 300.4 L 74.17 296.5 L 74.17 292.5 L 74.17 288.6 L 74.17 284.7 L 74.17 280.8 L 74.17 276.8 L 74.17 272.9 L 74.17 269.0 L 74.17 265.1 L 74.17 261.1 L 74.17 257.2 L 74.17 253.3 L 74.17 249.4 L 74.17 245.4 L 74.17 241.5 L 74.17 237.6 L 74.17 233.7 L 74.17 229.7 L 74.17 225.8 L 74.17 221.9 L 74.17 218.0 L 74.17 214.1 L 74.17 210.1 L 74.17 206.2 L 74.17 202.3 L 74.17 198.4 L 74.17 194.4 L 74.17 190.5 L 74.17 186.6 L 74.17 182.7 L 74.17 178.7 L 74.17 174.8 L 74.16 170.9 L 74.16 167.0 L 74.15 163.0 L 74.11 159.1 L 74.04 155.2 L 73.87 151.3 L 73.54 147.3 L 72.93 143.4 L 71.89 139.5 L 70.30 135.6 L 68.06 131.6 L 65.20 127.7 L 61.93 123.8 L 58.66 119.9 L 55.91 115.9 L 54.19 112.0 L 53.87 108.1 L 55.00 104.2 L 57.35 100.3 L 60.46 96.3 L 63.79 92.4 L 66.87 88.5 L 69.40 84.6 L 71.27 80.6 L 72.53 76.7 L 73.31 72.8 L 73.75 68.9 L 73.98 64.9 L 74.09 61.0 L 74.14 57.1 L 74.16 53.2 L 74.16 49.2 L 74.17 45.3 L 74.17 41.4 L 74.17 37.5 L 74.17 33.5 L 74.17 29.6 L 74.17 25.7 L 74.17 21.8 L 74.17 17.8 L 74.17 13.9 L 74.17 10.0 L 74.17 10.0 L 74.17 13.9 L 74.17 17.8 L 74.17 21.8 L 74.17 25.7 L 74.17 29.6 L 74.17 33.5 L 74.17 37.5 L 74.17 41.4 L 74.17 45.3 L 74.17 49.2 L 74.18 53.2 L 74.20 57.1 L 74.25 61.0 L 74.36 64.9 L 74.58 68.9 L 75.02 72.8 L 75.80 76.7 L 77.06 80.6 L 78.94 84.6 L 81.47 88.5 L 84.54 92.4 L 87.87 96.3 L 90.98 100.3 L 93.33 104.2 L 94.47 108.1 L 94.14 112.0 L 92.43 115.9 L 89.67 119.9 L 86.40 123.8 L 83.14 127.7 L 80.28 131.6 L 78.03 135.6 L 76.44 139.5 L 75.41 143.4 L 74.80 147.3 L 74.46 151.3 L 74.30 155.2 L 74.22 159.1 L 74.19 163.0 L 74.17 167.0 L 74.17 170.9 L 74.17 174.8 L 74.17 178.7 L 74.17 182.7 L 74.17 186.6 L 74.17 190.5 L 74.17 194.4 L 74.17 198.4 L 74.17 202.3 L 74.17 206.2 L 74.17 210.1 L 74.17 214.1 L 74.17 218.0 L 74.17 221.9 L 74.17 225.8 L 74.17 229.7 L 74.17 233.7 L 74.17 237.6 L 74.17 241.5 L 74.17 245.4 L 74.17 249.4 L 74.17 253.3 L 74.17 257.2 L 74.17 261.1 L 74.17 265.1 L 74.17 269.0 L 74.17 272.9 L 74.17 276.8 L 74.17 280.8 L 74.17 284.7 L 74.17 288.6 L 74.17 292.5 L 74.17 296.5 L 74.17 300.4 L 74.17 304.3 L 74.17 308.2 L 74.17 312.2 L 74.17 316.1 L 74.17 320.0 Z" class="violin"/>
+    <circle cx="74.17" cy="108.1" r="2.5" class="median"/>
+    <text x="74.17" y="338" text-anchor="middle" font-size="11" class="label">LA2</text>
+    <path d="M 122.34 320.0 L 122.30 316.1 L 122.24 312.2 L 122.17 308.2 L 122.09 304.3 L 121.99 300.4 L 121.88 296.5 L 121.75 292.5 L 121.60 288.6 L 121.43 284.7 L 121.25 280.8 L 121.05 276.8 L 120.84 272.9 L 120.62 269.0 L 120.39 265.1 L 120.16 261.1 L 119.94 257.2 L 119.72 253.3 L 119.53 249.4 L 119.35 245.4 L 119.20 241.5 L 119.08 237.6 L 118.99 233.7 L 118.95 229.7 L 118.94 225.8 L 118.97 221.9 L 119.04 218.0 L 119.15 214.1 L 119.29 210.1 L 119.45 206.2 L 119.64 202.3 L 119.85 198.4 L 120.07 194.4 L 120.30 190.5 L 120.52 186.6 L 120.74 182.7 L 120.96 178.7 L 121.15 174.8 L 121.32 170.9 L 121.47 167.0 L 121.57 163.0 L 121.63 159.1 L 121.62 155.2 L 121.54 151.3 L 121.36 147.3 L 121.06 143.4 L 120.63 139.5 L 120.06 135.6 L 119.37 131.6 L 118.57 127.7 L 117.70 123.8 L 116.83 119.9 L 116.02 115.9 L 115.34 112.0 L 114.88 108.1 L 114.66 104.2 L 114.72 100.3 L 115.05 96.3 L 115.62 92.4 L 116.37 88.5 L 117.23 84.6 L 118.13 80.6 L 119.01 76.7 L 119.81 72.8 L 120.50 68.9 L 121.06 64.9 L 121.50 61.0 L 121.84 57.1 L 122.07 53.2 L 122.23 49.2 L 122.34 45.3 L 122.41 41.4 L 122.45 37.5 L 122.47 33.5 L 122.49 29.6 L 122.49 25.7 L 122.50 21.8 L 122.50 17.8 L 122.50 13.9 L 122.50 10.0 L 122.50 10.0 L 122.50 13.9 L 122.50 17.8 L 122.50 21.8 L 122.51 25.7 L 122.51 29.6 L 122.53 33.5 L 122.55 37.5 L 122.59 41.4 L 122.66 45.3 L 122.77 49.2 L 122.93 53.2 L 123.16 57.1 L 123.50 61.0 L 123.94 64.9 L 124.50 68.9 L 125.19 72.8 L 125.99 76.7 L 126.87 80.6 L 127.77 84.6 L 128.63 88.5 L 129.38 92.4 L 129.95 96.3 L 130.28 100.3 L 130.34 104.2 L 130.12 108.1 L 129.66 112.0 L 128.98 115.9 L 128.17 119.9 L 127.30 123.8 L 126.43 127.7 L 125.63 131.6 L 124.94 135.6 L 124.37 139.5 L 123.94 143.4 L 123.64 147.3 L 123.46 151.3 L 123.38 155.2 L 123.37 159.1 L 123.43 163.0 L 123.53 167.0 L 123.68 170.9 L 123.85 174.8 L 124.04 178.7 L 124.26 182.7 L 124.48 186.6 L 124.70 190.5 L 124.93 194.4 L 125.15 198.4 L 125.36 202.3 L 125.55 206.2 L 125.71 210.1 L 125.85 214.1 L 125.96 218.0 L 126.03 221.9 L 126.06 225.8 L 126.05 229.7 L 126.01 233.7 L 125.92 237.6 L 125.80 241.5 L 125.65 245.4 L 125.47 249.4 L 125.28 253.3 L 125.06 257.2 L 124.84 261.1 L 124.61 265.1 L 124.38 269.0 L 124.16 272.9 L 123.95 276.8 L 123.75 280.8 L 123.57 284.7 L 123.40 288.6 L 123.25 292.5 L 123.12 296.5 L 123.01 300.4 L 122.91 304.3 L 122.83 308.2 L 122.76 312.2 L 122.70 316.1 L 122.66 320.0 Z" class="violin"/>
+    <circle cx="122.50" cy="131.6" r="2.5" class="median"/>
+    <text x="122.50" y="338" text-anchor="middle" font-size="11" class="label">LA3</text>
+    <path d="M 170.72 320.0 L 170.68 316.1 L 170.63 312.2 L 170.56 308.2 L 170.46 304.3 L 170.35 300.4 L 170.22 296.5 L 170.05 292.5 L 169.87 288.6 L 169.65 284.7 L 169.41 280.8 L 169.15 276.8 L 168.87 272.9 L 168.58 269.0 L 168.29 265.1 L 168.00 261.1 L 167.74 257.2 L 167.50 253.3 L 167.31 249.4 L 167.16 245.4 L 167.07 241.5 L 167.03 237.6 L 167.06 233.7 L 167.15 229.7 L 167.29 225.8 L 167.48 221.9 L 167.71 218.0 L 167.97 214.1 L 168.25 210.1 L 168.54 206.2 L 168.83 202.3 L 169.11 198.4 L 169.37 194.4 L 169.62 190.5 L 169.84 186.6 L 170.03 182.7 L 170.19 178.7 L 170.32 174.8 L 170.41 170.9 L 170.47 167.0 L 170.49 163.0 L 170.46 159.1 L 170.37 155.2 L 170.19 151.3 L 169.92 147.3 L 169.53 143.4 L 169.01 139.5 L 168.35 135.6 L 167.55 131.6 L 166.64 127.7 L 165.68 123.8 L 164.70 119.9 L 163.80 115.9 L 163.06 112.0 L 162.54 108.1 L 162.30 104.2 L 162.36 100.3 L 162.72 96.3 L 163.34 92.4 L 164.15 88.5 L 165.09 84.6 L 166.07 80.6 L 167.03 76.7 L 167.90 72.8 L 168.65 68.9 L 169.27 64.9 L 169.75 61.0 L 170.11 57.1 L 170.37 53.2 L 170.54 49.2 L 170.66 45.3 L 170.73 41.4 L 170.78 37.5 L 170.80 33.5 L 170.82 29.6 L 170.83 25.7 L 170.83 21.8 L 170.83 17.8 L 170.83 13.9 L 170.83 10.0 L 170.83 10.0 L 170.83 13.9 L 170.84 17.8 L 170.84 21.8 L 170.84 25.7 L 170.85 29.6 L 170.86 33.5 L 170.89 37.5 L 170.93 41.4 L 171.01 45.3 L 171.12 49.2 L 171.30 53.2 L 171.56 57.1 L 171.92 61.0 L 172.40 64.9 L 173.02 68.9 L 173.77 72.8 L 174.64 76.7 L 175.59 80.6 L 176.58 84.6 L 177.51 88.5 L 178.33 92.4 L 178.95 96.3 L 179.31 100.3 L 179.37 104.2 L 179.13 108.1 L 178.61 112.0 L 177.86 115.9 L 176.96 119.9 L 175.99 123.8 L 175.02 127.7 L 174.12 131.6 L 173.32 135.6 L 172.66 139.5 L 172.14 143.4 L 171.75 147.3 L 171.47 151.3 L 171.30 155.2 L 171.21 159.1 L 171.17 163.0 L 171.19 167.0 L 171.25 170.9 L 171.35 174.8 L 171.48 178.7 L 171.64 182.7 L 171.83 186.6 L 172.05 190.5 L 172.29 194.4 L 172.56 198.4 L 172.84 202.3 L 173.13 206.2 L 173.42 210.1 L 173.70 214.1 L 173.96 218.0 L 174.19 221.9 L 174.38 225.8 L 174.52 229.7 L 174.61 233.7 L 174.63 237.6 L 174.60 241.5 L 174.51 245.4 L 174.36 249.4 L 174.16 253.3 L 173.93 257.2 L 173.66 261.1 L 173.38 265.1 L 173.09 269.0 L 172.80 272.9 L 172.52 276.8 L 172.26 280.8 L 172.02 284.7 L 171.80 288.6 L 171.61 292.5 L 171.45 296.5 L 171.31 300.4 L 171.20 304.3 L 171.11 308.2 L 171.04 312.2 L 170.98 316.1 L 170.94 320.0 Z" class="violin"/>
+    <circle cx="170.83" cy="123.8" r="2.5" class="median"/>
+    <text x="170.83" y="338" text-anchor="middle" font-size="11" class="label">LA5</text>
+    <path d="M 219.01 320.0 L 218.97 316.1 L 218.92 312.2 L 218.86 308.2 L 218.79 304.3 L 218.71 300.4 L 218.61 296.5 L 218.51 292.5 L 218.38 288.6 L 218.25 284.7 L 218.10 280.8 L 217.93 276.8 L 217.76 272.9 L 217.57 269.0 L 217.37 265.1 L 217.17 261.1 L 216.96 257.2 L 216.76 253.3 L 216.56 249.4 L 216.37 245.4 L 216.19 241.5 L 216.03 237.6 L 215.89 233.7 L 215.78 229.7 L 215.69 225.8 L 215.63 221.9 L 215.61 218.0 L 215.61 214.1 L 215.65 210.1 L 215.72 206.2 L 215.81 202.3 L 215.94 198.4 L 216.08 194.4 L 216.25 190.5 L 216.43 186.6 L 216.62 182.7 L 216.81 178.7 L 217.01 174.8 L 217.20 170.9 L 217.37 167.0 L 217.53 163.0 L 217.65 159.1 L 217.74 155.2 L 217.78 151.3 L 217.77 147.3 L 217.69 143.4 L 217.54 139.5 L 217.32 135.6 L 217.01 131.6 L 216.63 127.7 L 216.18 123.8 L 215.68 119.9 L 215.16 115.9 L 214.64 112.0 L 214.16 108.1 L 213.75 104.2 L 213.43 100.3 L 213.24 96.3 L 213.19 92.4 L 213.28 88.5 L 213.52 84.6 L 213.87 80.6 L 214.33 76.7 L 214.85 72.8 L 215.41 68.9 L 215.98 64.9 L 216.53 61.0 L 217.04 57.1 L 217.50 53.2 L 217.88 49.2 L 218.21 45.3 L 218.47 41.4 L 218.67 37.5 L 218.82 33.5 L 218.93 29.6 L 219.01 25.7 L 219.07 21.8 L 219.10 17.8 L 219.13 13.9 L 219.14 10.0 L 219.19 10.0 L 219.21 13.9 L 219.23 17.8 L 219.27 21.8 L 219.32 25.7 L 219.40 29.6 L 219.51 33.5 L 219.67 37.5 L 219.87 41.4 L 220.13 45.3 L 220.45 49.2 L 220.84 53.2 L 221.29 57.1 L 221.80 61.0 L 222.35 64.9 L 222.92 68.9 L 223.48 72.8 L 224.01 76.7 L 224.46 80.6 L 224.82 84.6 L 225.05 88.5 L 225.14 92.4 L 225.09 96.3 L 224.90 100.3 L 224.59 104.2 L 224.17 108.1 L 223.69 112.0 L 223.17 115.9 L 222.65 119.9 L 222.15 123.8 L 221.71 127.7 L 221.32 131.6 L 221.02 135.6 L 220.79 139.5 L 220.64 143.4 L 220.56 147.3 L 220.55 151.3 L 220.59 155.2 L 220.68 159.1 L 220.81 163.0 L 220.96 167.0 L 221.14 170.9 L 221.32 174.8 L 221.52 178.7 L 221.71 182.7 L 221.90 186.6 L 222.09 190.5 L 222.25 194.4 L 222.40 198.4 L 222.52 202.3 L 222.62 206.2 L 222.69 210.1 L 222.72 214.1 L 222.73 218.0 L 222.70 221.9 L 222.64 225.8 L 222.56 229.7 L 222.44 233.7 L 222.30 237.6 L 222.14 241.5 L 221.96 245.4 L 221.77 249.4 L 221.57 253.3 L 221.37 257.2 L 221.16 261.1 L 220.96 265.1 L 220.77 269.0 L 220.58 272.9 L 220.40 276.8 L 220.24 280.8 L 220.09 284.7 L 219.95 288.6 L 219.83 292.5 L 219.72 296.5 L 219.62 300.4 L 219.54 304.3 L 219.47 308.2 L 219.41 312.2 L 219.36 316.1 L 219.32 320.0 Z" class="violin"/>
+    <circle cx="219.17" cy="139.5" r="2.5" class="median"/>
+    <text x="219.17" y="338" text-anchor="middle" font-size="11" class="label">LA7</text>
+    <path d="M 267.50 320.0 L 267.50 316.1 L 267.50 312.2 L 267.50 308.2 L 267.50 304.3 L 267.50 300.4 L 267.50 296.5 L 267.50 292.5 L 267.50 288.6 L 267.50 284.7 L 267.50 280.8 L 267.50 276.8 L 267.49 272.9 L 267.49 269.0 L 267.48 265.1 L 267.48 261.1 L 267.47 257.2 L 267.45 253.3 L 267.44 249.4 L 267.41 245.4 L 267.38 241.5 L 267.34 237.6 L 267.28 233.7 L 267.21 229.7 L 267.12 225.8 L 267.01 221.9 L 266.88 218.0 L 266.72 214.1 L 266.52 210.1 L 266.30 206.2 L 266.03 202.3 L 265.73 198.4 L 265.38 194.4 L 265.00 190.5 L 264.58 186.6 L 264.13 182.7 L 263.66 178.7 L 263.16 174.8 L 262.66 170.9 L 262.15 167.0 L 261.66 163.0 L 261.20 159.1 L 260.77 155.2 L 260.39 151.3 L 260.08 147.3 L 259.83 143.4 L 259.67 139.5 L 259.59 135.6 L 259.60 131.6 L 259.69 127.7 L 259.87 123.8 L 260.13 119.9 L 260.46 115.9 L 260.85 112.0 L 261.29 108.1 L 261.76 104.2 L 262.25 100.3 L 262.76 96.3 L 263.26 92.4 L 263.76 88.5 L 264.23 84.6 L 264.67 80.6 L 265.08 76.7 L 265.46 72.8 L 265.79 68.9 L 266.09 64.9 L 266.34 61.0 L 266.57 57.1 L 266.75 53.2 L 266.91 49.2 L 267.04 45.3 L 267.14 41.4 L 267.23 37.5 L 267.29 33.5 L 267.35 29.6 L 267.39 25.7 L 267.42 21.8 L 267.44 17.8 L 267.46 13.9 L 267.47 10.0 L 267.53 10.0 L 267.54 13.9 L 267.56 17.8 L 267.58 21.8 L 267.61 25.7 L 267.65 29.6 L 267.71 33.5 L 267.77 37.5 L 267.86 41.4 L 267.96 45.3 L 268.09 49.2 L 268.25 53.2 L 268.43 57.1 L 268.66 61.0 L 268.91 64.9 L 269.21 68.9 L 269.54 72.8 L 269.92 76.7 L 270.33 80.6 L 270.77 84.6 L 271.24 88.5 L 271.74 92.4 L 272.24 96.3 L 272.75 100.3 L 273.24 104.2 L 273.71 108.1 L 274.15 112.0 L 274.54 115.9 L 274.87 119.9 L 275.13 123.8 L 275.31 127.7 L 275.40 131.6 L 275.41 135.6 L 275.33 139.5 L 275.17 143.4 L 274.92 147.3 L 274.61 151.3 L 274.23 155.2 L 273.80 159.1 L 273.34 163.0 L 272.85 167.0 L 272.34 170.9 L 271.84 174.8 L 271.34 178.7 L 270.87 182.7 L 270.42 186.6 L 270.00 190.5 L 269.62 194.4 L 269.27 198.4 L 268.97 202.3 L 268.70 206.2 L 268.48 210.1 L 268.28 214.1 L 268.12 218.0 L 267.99 221.9 L 267.88 225.8 L 267.79 229.7 L 267.72 233.7 L 267.66 237.6 L 267.62 241.5 L 267.59 245.4 L 267.56 249.4 L 267.55 253.3 L 267.53 257.2 L 267.52 261.1 L 267.52 265.1 L 267.51 269.0 L 267.51 272.9 L 267.50 276.8 L 267.50 280.8 L 267.50 284.7 L 267.50 288.6 L 267.50 292.5 L 267.50 296.5 L 267.50 300.4 L 267.50 304.3 L 267.50 308.2 L 267.50 312.2 L 267.50 316.1 L 267.50 320.0 Z" class="violin"/>
+    <circle cx="267.50" cy="135.6" r="2.5" class="median"/>
+    <text x="267.50" y="338" text-anchor="middle" font-size="11" class="label">β-prop</text>
+    <path d="M 315.72 320.0 L 315.65 316.1 L 315.55 312.2 L 315.41 308.2 L 315.22 304.3 L 314.96 300.4 L 314.63 296.5 L 314.21 292.5 L 313.71 288.6 L 313.10 284.7 L 312.42 280.8 L 311.67 276.8 L 310.88 272.9 L 310.09 269.0 L 309.33 265.1 L 308.66 261.1 L 308.11 257.2 L 307.73 253.3 L 307.54 249.4 L 307.55 245.4 L 307.77 241.5 L 308.18 237.6 L 308.74 233.7 L 309.43 229.7 L 310.19 225.8 L 310.99 221.9 L 311.77 218.0 L 312.52 214.1 L 313.19 210.1 L 313.78 206.2 L 314.28 202.3 L 314.68 198.4 L 315.00 194.4 L 315.25 190.5 L 315.43 186.6 L 315.57 182.7 L 315.66 178.7 L 315.72 174.8 L 315.76 170.9 L 315.79 167.0 L 315.81 163.0 L 315.82 159.1 L 315.82 155.2 L 315.82 151.3 L 315.79 147.3 L 315.71 143.4 L 315.49 139.5 L 314.99 135.6 L 314.05 131.6 L 312.59 127.7 L 310.71 123.8 L 308.83 119.9 L 307.55 115.9 L 307.35 112.0 L 308.31 108.1 L 310.06 104.2 L 312.00 100.3 L 313.63 96.3 L 314.73 92.4 L 315.36 88.5 L 315.66 84.6 L 315.78 80.6 L 315.82 76.7 L 315.83 72.8 L 315.83 68.9 L 315.83 64.9 L 315.83 61.0 L 315.83 57.1 L 315.83 53.2 L 315.83 49.2 L 315.83 45.3 L 315.83 41.4 L 315.83 37.5 L 315.83 33.5 L 315.83 29.6 L 315.83 25.7 L 315.83 21.8 L 315.83 17.8 L 315.83 13.9 L 315.83 10.0 L 315.83 10.0 L 315.83 13.9 L 315.83 17.8 L 315.83 21.8 L 315.83 25.7 L 315.83 29.6 L 315.83 33.5 L 315.83 37.5 L 315.83 41.4 L 315.83 45.3 L 315.83 49.2 L 315.83 53.2 L 315.83 57.1 L 315.83 61.0 L 315.83 64.9 L 315.83 68.9 L 315.84 72.8 L 315.85 76.7 L 315.89 80.6 L 316.01 84.6 L 316.31 88.5 L 316.93 92.4 L 318.04 96.3 L 319.67 100.3 L 321.61 104.2 L 323.36 108.1 L 324.32 112.0 L 324.11 115.9 L 322.83 119.9 L 320.95 123.8 L 319.08 127.7 L 317.61 131.6 L 316.68 135.6 L 316.18 139.5 L 315.96 143.4 L 315.87 147.3 L 315.85 151.3 L 315.84 155.2 L 315.85 159.1 L 315.86 163.0 L 315.88 167.0 L 315.90 170.9 L 315.94 174.8 L 316.01 178.7 L 316.10 182.7 L 316.23 186.6 L 316.42 190.5 L 316.66 194.4 L 316.98 198.4 L 317.39 202.3 L 317.89 206.2 L 318.48 210.1 L 319.15 214.1 L 319.89 218.0 L 320.68 221.9 L 321.47 225.8 L 322.24 229.7 L 322.92 233.7 L 323.49 237.6 L 323.89 241.5 L 324.11 245.4 L 324.13 249.4 L 323.94 253.3 L 323.55 257.2 L 323.01 261.1 L 322.33 265.1 L 321.58 269.0 L 320.79 272.9 L 320.00 276.8 L 319.25 280.8 L 318.56 284.7 L 317.96 288.6 L 317.45 292.5 L 317.03 296.5 L 316.70 300.4 L 316.45 304.3 L 316.25 308.2 L 316.12 312.2 L 316.02 316.1 L 315.95 320.0 Z" class="violin"/>
+    <circle cx="315.83" cy="233.7" r="2.5" class="median"/>
+    <text x="315.83" y="338" text-anchor="middle" font-size="11" class="label">NPxY</text>
+    <text x="195.0" y="360" text-anchor="middle" font-size="12" class="label">structural domain</text>
+  </g>
+  <g transform="translate(380, 25)">
+    <line x1="70.0" y1="10" x2="70.0" y2="320" class="grid"/>
+    <text x="70.0" y="334" text-anchor="middle" font-size="11" class="tick">-1.0</text>
+    <line x1="160.0" y1="10" x2="160.0" y2="320" class="grid"/>
+    <text x="160.0" y="334" text-anchor="middle" font-size="11" class="tick">-0.5</text>
+    <line x1="250.0" y1="10" x2="250.0" y2="320" class="zero"/>
+    <text x="250.0" y="334" text-anchor="middle" font-size="11" class="tick">0.0</text>
+    <line x1="340.0" y1="10" x2="340.0" y2="320" class="grid"/>
+    <text x="340.0" y="334" text-anchor="middle" font-size="11" class="tick">0.5</text>
+    <path d="M 70.0 281.8 L 70.0 281.32 L 73.4 281.02 L 76.8 280.58 L 80.3 279.96 L 83.7 279.11 L 87.1 277.97 L 90.5 276.49 L 93.9 274.62 L 97.3 272.35 L 100.8 269.67 L 104.2 266.61 L 107.6 263.26 L 111.0 259.74 L 114.4 256.20 L 117.8 252.83 L 121.3 249.83 L 124.7 247.39 L 128.1 245.68 L 131.5 244.83 L 134.9 244.89 L 138.4 245.86 L 141.8 247.68 L 145.2 250.20 L 148.6 253.26 L 152.0 256.67 L 155.4 260.22 L 158.9 263.72 L 162.3 267.04 L 165.7 270.05 L 169.1 272.67 L 172.5 274.89 L 175.9 276.71 L 179.4 278.14 L 182.8 279.24 L 186.2 280.06 L 189.6 280.65 L 193.0 281.07 L 196.5 281.35 L 199.9 281.54 L 203.3 281.66 L 206.7 281.74 L 210.1 281.78 L 213.5 281.80 L 217.0 281.78 L 220.4 281.67 L 223.8 281.29 L 227.2 280.29 L 230.6 278.08 L 234.1 273.91 L 237.5 267.37 L 240.9 258.99 L 244.3 250.61 L 247.7 244.88 L 251.1 243.98 L 254.6 248.27 L 258.0 256.07 L 261.4 264.72 L 264.8 271.99 L 268.2 276.94 L 271.6 279.73 L 275.1 281.06 L 278.5 281.59 L 281.9 281.77 L 285.3 281.83 L 288.7 281.84 L 292.2 281.85 L 295.6 281.85 L 299.0 281.85 L 302.4 281.85 L 305.8 281.85 L 309.2 281.85 L 312.7 281.85 L 316.1 281.85 L 319.5 281.85 L 322.9 281.85 L 326.3 281.85 L 329.7 281.85 L 333.2 281.85 L 336.6 281.85 L 340.0 281.85 L 340.0 281.8 Z" class="ridge"/>
+    <text x="62" y="285.3" text-anchor="end" font-size="11" class="label">NPxY</text>
+    <path d="M 70.0 234.2 L 70.0 234.15 L 73.4 234.15 L 76.8 234.15 L 80.3 234.15 L 83.7 234.15 L 87.1 234.15 L 90.5 234.15 L 93.9 234.15 L 97.3 234.15 L 100.8 234.14 L 104.2 234.14 L 107.6 234.13 L 111.0 234.12 L 114.4 234.10 L 117.8 234.08 L 121.3 234.05 L 124.7 234.01 L 128.1 233.95 L 131.5 233.87 L 134.9 233.76 L 138.4 233.61 L 141.8 233.42 L 145.2 233.18 L 148.6 232.87 L 152.0 232.47 L 155.4 231.99 L 158.9 231.39 L 162.3 230.66 L 165.7 229.80 L 169.1 228.78 L 172.5 227.60 L 175.9 226.24 L 179.4 224.71 L 182.8 223.00 L 186.2 221.14 L 189.6 219.13 L 193.0 217.00 L 196.5 214.79 L 199.9 212.54 L 203.3 210.29 L 206.7 208.09 L 210.1 206.01 L 213.5 204.11 L 217.0 202.42 L 220.4 201.01 L 223.8 199.93 L 227.2 199.20 L 230.6 198.84 L 234.1 198.88 L 237.5 199.31 L 240.9 200.12 L 244.3 201.27 L 247.7 202.74 L 251.1 204.47 L 254.6 206.42 L 258.0 208.53 L 261.4 210.73 L 264.8 212.99 L 268.2 215.24 L 271.6 217.44 L 275.1 219.54 L 278.5 221.52 L 281.9 223.36 L 285.3 225.03 L 288.7 226.52 L 292.2 227.85 L 295.6 229.00 L 299.0 229.98 L 302.4 230.82 L 305.8 231.52 L 309.2 232.09 L 312.7 232.56 L 316.1 232.93 L 319.5 233.23 L 322.9 233.46 L 326.3 233.64 L 329.7 233.78 L 333.2 233.88 L 336.6 233.96 L 340.0 234.02 L 340.0 234.2 Z" class="ridge"/>
+    <text x="62" y="237.7" text-anchor="end" font-size="11" class="label">β-prop</text>
+    <path d="M 70.0 186.5 L 70.0 185.76 L 73.4 185.58 L 76.8 185.36 L 80.3 185.09 L 83.7 184.78 L 87.1 184.42 L 90.5 183.99 L 93.9 183.51 L 97.3 182.96 L 100.8 182.35 L 104.2 181.68 L 107.6 180.95 L 111.0 180.16 L 114.4 179.32 L 117.8 178.45 L 121.3 177.55 L 124.7 176.63 L 128.1 175.72 L 131.5 174.83 L 134.9 173.98 L 138.4 173.19 L 141.8 172.47 L 145.2 171.85 L 148.6 171.33 L 152.0 170.94 L 155.4 170.68 L 158.9 170.57 L 162.3 170.59 L 165.7 170.76 L 169.1 171.06 L 172.5 171.49 L 175.9 172.04 L 179.4 172.69 L 182.8 173.43 L 186.2 174.24 L 189.6 175.09 L 193.0 175.96 L 196.5 176.83 L 199.9 177.67 L 203.3 178.45 L 206.7 179.13 L 210.1 179.70 L 213.5 180.10 L 217.0 180.29 L 220.4 180.23 L 223.8 179.89 L 227.2 179.22 L 230.6 178.21 L 234.1 176.84 L 237.5 175.13 L 240.9 173.13 L 244.3 170.92 L 247.7 168.59 L 251.1 166.27 L 254.6 164.12 L 258.0 162.27 L 261.4 160.87 L 264.8 160.01 L 268.2 159.78 L 271.6 160.20 L 275.1 161.24 L 278.5 162.83 L 281.9 164.86 L 285.3 167.20 L 288.7 169.71 L 292.2 172.26 L 295.6 174.71 L 299.0 176.98 L 302.4 179.00 L 305.8 180.74 L 309.2 182.18 L 312.7 183.33 L 316.1 184.23 L 319.5 184.91 L 322.9 185.41 L 326.3 185.77 L 329.7 186.02 L 333.2 186.18 L 336.6 186.29 L 340.0 186.36 L 340.0 186.5 Z" class="ridge"/>
+    <text x="62" y="190.0" text-anchor="end" font-size="11" class="label">LA7</text>
+    <path d="M 70.0 138.8 L 70.0 138.28 L 73.4 138.10 L 76.8 137.85 L 80.3 137.53 L 83.7 137.12 L 87.1 136.62 L 90.5 136.02 L 93.9 135.29 L 97.3 134.45 L 100.8 133.49 L 104.2 132.41 L 107.6 131.24 L 111.0 129.99 L 114.4 128.70 L 117.8 127.40 L 121.3 126.14 L 124.7 124.96 L 128.1 123.91 L 131.5 123.04 L 134.9 122.38 L 138.4 121.96 L 141.8 121.81 L 145.2 121.92 L 148.6 122.31 L 152.0 122.94 L 155.4 123.78 L 158.9 124.81 L 162.3 125.97 L 165.7 127.23 L 169.1 128.52 L 172.5 129.82 L 175.9 131.07 L 179.4 132.26 L 182.8 133.34 L 186.2 134.32 L 189.6 135.17 L 193.0 135.88 L 196.5 136.46 L 199.9 136.89 L 203.3 137.16 L 206.7 137.25 L 210.1 137.11 L 213.5 136.69 L 217.0 135.91 L 220.4 134.70 L 223.8 132.96 L 227.2 130.62 L 230.6 127.67 L 234.1 124.11 L 237.5 120.07 L 240.9 115.74 L 244.3 111.41 L 247.7 107.40 L 251.1 104.07 L 254.6 101.74 L 258.0 100.66 L 261.4 100.94 L 264.8 102.54 L 268.2 105.30 L 271.6 108.95 L 275.1 113.14 L 278.5 117.52 L 281.9 121.78 L 285.3 125.66 L 288.7 129.02 L 292.2 131.77 L 295.6 133.92 L 299.0 135.53 L 302.4 136.68 L 305.8 137.47 L 309.2 137.99 L 312.7 138.32 L 316.1 138.52 L 319.5 138.63 L 322.9 138.70 L 326.3 138.73 L 329.7 138.75 L 333.2 138.76 L 336.6 138.77 L 340.0 138.77 L 340.0 138.8 Z" class="ridge"/>
+    <text x="62" y="142.3" text-anchor="end" font-size="11" class="label">LA5</text>
+    <path d="M 70.0 91.1 L 70.0 90.38 L 73.4 90.17 L 76.8 89.92 L 80.3 89.61 L 83.7 89.24 L 87.1 88.80 L 90.5 88.29 L 93.9 87.71 L 97.3 87.04 L 100.8 86.30 L 104.2 85.48 L 107.6 84.59 L 111.0 83.65 L 114.4 82.67 L 117.8 81.65 L 121.3 80.64 L 124.7 79.64 L 128.1 78.69 L 131.5 77.80 L 134.9 77.01 L 138.4 76.34 L 141.8 75.81 L 145.2 75.43 L 148.6 75.22 L 152.0 75.18 L 155.4 75.32 L 158.9 75.63 L 162.3 76.11 L 165.7 76.73 L 169.1 77.47 L 172.5 78.32 L 175.9 79.25 L 179.4 80.23 L 182.8 81.24 L 186.2 82.25 L 189.6 83.24 L 193.0 84.18 L 196.5 85.05 L 199.9 85.82 L 203.3 86.46 L 206.7 86.94 L 210.1 87.19 L 213.5 87.17 L 217.0 86.79 L 220.4 85.97 L 223.8 84.63 L 227.2 82.72 L 230.6 80.19 L 234.1 77.09 L 237.5 73.52 L 240.9 69.65 L 244.3 65.75 L 247.7 62.14 L 251.1 59.14 L 254.6 57.04 L 258.0 56.08 L 261.4 56.35 L 264.8 57.83 L 268.2 60.37 L 271.6 63.72 L 275.1 67.57 L 278.5 71.59 L 281.9 75.50 L 285.3 79.06 L 288.7 82.13 L 292.2 84.66 L 295.6 86.63 L 299.0 88.11 L 302.4 89.17 L 305.8 89.89 L 309.2 90.37 L 312.7 90.67 L 316.1 90.85 L 319.5 90.95 L 322.9 91.01 L 326.3 91.04 L 329.7 91.06 L 333.2 91.07 L 336.6 91.07 L 340.0 91.08 L 340.0 91.1 Z" class="ridge"/>
+    <text x="62" y="94.6" text-anchor="end" font-size="11" class="label">LA3</text>
+    <path d="M 70.0 43.4 L 70.0 43.38 L 73.4 43.38 L 76.8 43.38 L 80.3 43.38 L 83.7 43.38 L 87.1 43.38 L 90.5 43.38 L 93.9 43.38 L 97.3 43.38 L 100.8 43.38 L 104.2 43.38 L 107.6 43.38 L 111.0 43.38 L 114.4 43.38 L 117.8 43.38 L 121.3 43.38 L 124.7 43.38 L 128.1 43.38 L 131.5 43.38 L 134.9 43.38 L 138.4 43.38 L 141.8 43.38 L 145.2 43.38 L 148.6 43.38 L 152.0 43.38 L 155.4 43.38 L 158.9 43.38 L 162.3 43.38 L 165.7 43.38 L 169.1 43.38 L 172.5 43.38 L 175.9 43.38 L 179.4 43.38 L 182.8 43.38 L 186.2 43.38 L 189.6 43.38 L 193.0 43.38 L 196.5 43.38 L 199.9 43.37 L 203.3 43.35 L 206.7 43.30 L 210.1 43.15 L 213.5 42.80 L 217.0 42.06 L 220.4 40.57 L 223.8 37.84 L 227.2 33.24 L 230.6 26.13 L 234.1 16.11 L 237.5 3.34 L 240.9 -11.24 L 244.3 -25.84 L 247.7 -38.12 L 251.1 -45.78 L 254.6 -47.23 L 258.0 -42.18 L 261.4 -31.67 L 264.8 -17.79 L 268.2 -2.94 L 271.6 10.80 L 275.1 22.09 L 278.5 30.45 L 281.9 36.09 L 285.3 39.56 L 288.7 41.52 L 292.2 42.54 L 295.6 43.03 L 299.0 43.25 L 302.4 43.33 L 305.8 43.37 L 309.2 43.38 L 312.7 43.38 L 316.1 43.38 L 319.5 43.38 L 322.9 43.38 L 326.3 43.38 L 329.7 43.38 L 333.2 43.38 L 336.6 43.38 L 340.0 43.38 L 340.0 43.4 Z" class="ridge"/>
+    <text x="62" y="46.9" text-anchor="end" font-size="11" class="label">LA2</text>
+    <text x="205.0" y="352" text-anchor="middle" font-size="12" class="label">B score</text>
+  </g>
+</svg>
+
+   *Note: this schematic shows simulated distributions designed to illustrate the patterns we expect; your real plots in this phase should be built from Tabet's data directly. Seaborn's `sns.violinplot(data=df, x="domain", y="B")` is the one-line version for the left panel; the `joypy` package gives a one-line ridgeline via `joypy.joyplot(df, by="domain", column="B")`.*
+
+2. **Joint hexbin of (S, B)** with marginal histograms (`seaborn.jointplot(kind="hex")`). With ~17,000 variants and only two derived scores, this is your single most informative figure. Overlay ClinVar P/LP variants as colored points on top of the hexbin background.
+3. **Per-position mean trace** along the LDLR sequence (residues 1–860): two line plots showing mean S and mean B at each position, with secondary-structure and domain boundaries annotated. This gives a 2 × 860 view that's easy to scan for hotspots. The β-propeller and NPxY regions should show as B-axis hotspots without corresponding S-axis effect.
+4. **Structural overlay on PDB 9BDE** (the LDLR-ApoB100 complex Tabet uses): color residues on the structure by mean B. PyMol can load per-residue scalars into the B-factor column and color from there. The "binding-specific" residues (high |B|, low |S|) should cluster at the ApoB100 interface if our decomposition is doing what it should.
+5. **PCA of (S, B)** colored by domain and by ClinVar status. With only two axes this is essentially a rotation of the joint hexbin, but it tells us whether the two derived scores are genuinely orthogonal across the variant population or whether most variation lies on a single damage axis.
+
+Before fitting any model, eyeball these plots and write down what patterns you see. The most informative single figure will probably be the structural overlay — if B maps cleanly onto known mechanistic features (the ApoB100 interface, the β-propeller, the NPxY motif), we have evidence the decomposition is biologically meaningful. If it doesn't, the decomposition needs rethinking before we proceed.
+
+**Deliverable at end of Phase 3:** A figure deck (5–10 figures) and a paragraph for each describing what it shows. Budget one to two weeks. Talk to me when this is done — the next phase depends on what these figures look like.
+
+---
+
+## Phase 4: domain-to-parameter assignment
+
+Using the figures from Phase 3 and the model audit from Phase 0, write down a tentative assignment of which structural domain affects which model parameter(s). Something like:
+
+- LA3, LA4, LA5, LA7 substitutions → primarily LDL-binding affinity
+- β-propeller polar substitutions → endosomal pH-dependent dissociation rate
+- NPxY substitutions → internalization rate
+- Disulfide-bridge cysteines (especially in LA modules and EGF repeats) → stability / abundance
+- Backbone-disrupting substitutions (proline introduction, glycine in helices) → stability / abundance
+- LA1, LA2, LA6 → set aside as a separate category (see Phase 0 scope note); fit a "minimal effect on LDL binding" prior, knowing we're missing the VLDL-specificity story
+
+This is still rule-based and somewhat manual, but it's grounded in the data and gives us starting priors for Phase 5.
+
+**Deliverable at end of Phase 4:** A table of (residue feature) → (model parameter affected, with expected sign and magnitude). Budget a few days.
+
+---
+
+## Phase 5: hierarchical Bayesian fit
+
+Now we formalize the rules. For each variant *i*, we treat it as having a perturbation vector θ_i in our model parameter space (so θ_i has length equal to the number of model parameters identified in Phase 0 as variant-affected — probably 3 to 5 parameters: stability, binding affinity, internalization rate, and possibly endosomal dissociation and recycling). We model θ_i as a draw from a distribution whose mean depends on residue-level features:
+
+θ_i = β · X_i + ε_i
+
+where X_i is a vector of features for variant *i* (substitution class, BLOSUM score, hydrophobicity change, charge change, ConSurf conservation, FoldX or MutateX ΔΔG, distance to ApoB100 interface, secondary-structure context, domain identity), β is the matrix of feature-to-parameter effects we want to learn, and ε_i is a residue-specific random effect with partial pooling across variants at the same position.
+
+The observation model is the two Tabet readouts (S and B) as a function of θ_i — i.e., the forward simulation of our mechanistic model with parameters perturbed by θ_i, compared to the observed scores. PyMC or Stan handle this naturally. Use weakly informative priors on β; posterior summaries give you rules with credible intervals.
+
+Two specific design choices for this phase:
+
+- **LA1/LA2/LA6 handling**: include them in the fit but with a domain-indicator feature that absorbs their average behavior into a nuisance term, rather than letting them contribute to the residue-class effects we care about. This way they don't pull the binding-affinity rules toward "LA-module substitutions don't matter."
+- **Identifiability check**: with only two observables (S, B) per variant we can identify at most two parameters per variant without strong priors. If our model has 4+ parameters, the priors from Phase 4 are doing real identifiability work and we need to be honest about that. Run prior-predictive checks and posterior-predictive checks to make sure the inferred parameters aren't just regurgitating the priors.
+
+This is the modeling backbone. The features β will tell us things like "introduction of proline in an LA module reduces stability parameter by X (95% CrI Y, Z) and has no effect on binding affinity" — which is exactly the kind of rule you've been extracting manually, but now with uncertainty and with global rather than local pooling.
+
+**Deliverable at end of Phase 5:** A fitted model with posterior summaries of β, residual diagnostics by domain and a table of learned rules. Budget three to four weeks. This is the heart of the project.
+
+---
+
+## Phase 6 (later, conditional on Phase 5 results): neural extension
+
+If the hierarchical Bayesian model leaves systematic residual structure — i.e., specific positions or substitution classes that aren't well predicted by the engineered features — we add a protein-language-model embedding (ESM-2 from Meta, or ESM-3) as a nonlinear correction term. The architecture is: engineered features for the interpretable backbone, PLM embedding through a small MLP head for the residual. This pattern has been working well in the protein-fitness literature (see Marks lab and Notin et al.).
+
+We only do this if Phase 5 leaves meat on the bone. Don't preempt.
+
+---
+
+## Phase 7 (later, if needed): end-to-end ODE fit
+
+If the parameter estimates from Phase 5 don't run cleanly through our mechanistic model — i.e., simulating the ODE with the inferred θ_i doesn't reproduce the observed S and B — we'd consider end-to-end training where the ODE sits inside the loss and the variant-to-parameter map is updated by gradients flowing back through the simulator. This is the Universal Differential Equations (Rackauckas) pattern. It's heavy machinery and we should resist it until we have evidence we need it.
+
+---
+
+## Possible Phase 8 (future): incorporate the VLDL arm
+
+If the two-readout framework works cleanly, the natural extension is to bring back Tabet's VLDL-competition data, extend our BNGL model to include VLDL as a distinct ligand species with its own binding parameter, and re-fit. This recovers the LA2/LA6 story and addresses the blind spot we've accepted as a scope limitation. Worth doing if Phases 1-5 succeed; not worth scoping in now.
+
+---
+
+## Tools and references to skim
+
+- **PyMC** for the hierarchical Bayesian fit (`pymc.io`). Stan is fine too if you prefer.
+- **ESM-2** via HuggingFace `facebook/esm2_t33_650M_UR50D` for Phase 6.
+- **FoldX or MutateX** for ΔΔG features (Tabet used MutateX per their ref 104; either works).
+- **ConSurf** for conservation scores (Tabet's ref 27).
+- **PyMol** for the structural overlay; the `alterB` trick loads scalars into the B-factor column.
+- **BNGL** for any modifications to our mechanistic model.
+
+A few papers worth reading before you start Phase 5:
+
+- Faure et al., *Nature* 2022, on double-deep mutational scanning and thermodynamic-model fitting (the framework conceptually closest to what we're doing).
+- Schmiedel & Lehner, *Nature Genetics* 2019, on inferring biophysical parameters from MAVE data.
+- Rackauckas et al., 2020 arXiv preprint on Universal Differential Equations (for Phase 7 context).
+- Tabet et al. itself, paying particular attention to their Fig. 3 (the function-vs-abundance contrast across domains) and the LA2/LA6 VLDL-competition analysis (so you understand what we're choosing not to model).
+
+---
+
+## Cadence and check-ins
+
+- Phase 0 deliverable: bring to me before starting Phase 1. This is the gate.
+- Phase 3 deliverable: bring to me before starting Phase 5. The figures will determine model structure for the Bayesian fit.
+- Otherwise: weekly check-ins, with the Phase deliverables as natural milestones.
+
+If you get stuck on any phase for more than a few days, stop and ask rather than grinding. Most of the value of this plan is in the structure, not in any one phase being perfectly executed.
