@@ -1,9 +1,9 @@
 """
-LDLR ridge regression — can 26 variant features predict B and S?
+LDLR ridge regression — can variant features predict B and S?
 =================================================================
 
 PURPOSE
-  Tests whether a fixed set of 26 variant features carries enough
+  Tests whether a fixed set of variant features (the 26-feature design) carries enough
   information to predict the two phenotype components of LDLR missense
   variants (Tabet et al., Science 2025), without the mechanistic model:
     S = abundance_score                       (surface abundance, = A)
@@ -17,14 +17,19 @@ INPUT
   ldlr_variant_scores_v5.csv (16,330 rows). Only true missense variants
   are analysed: rows with no ref/alt amino acid (synonymous, in-frame
   deletions) and stop-gain rows (alt = Ter) are removed -> 14,617 variants.
+  The structural columns (dist_apob100, is_in_helix, is_in_strand) are
+  computed by ldlr_structure_features.py from PDB 9BDE and PDB 1N7D; the
+  column ss_source records which structure the secondary structure came
+  from and is not used by the model.
 
-THE 26 FEATURES
-  "26 features" is the established name of this feature set, kept from
-  the original feature design (8 substitution + 14 domain + 4 structural).
-  Domain identity is encoded here with all 17 region labels in the CSV,
-  so the model receives 8 + 17 + 1 + 4 = 30 feature columns, plus 2
-  missing-data indicators (32 columns in the flat model). The biological
-  content is the same 26-feature design.
+THE 26-FEATURE DESIGN (25 used in this version)
+  The design has 26 features: 8 substitution + 14 domain + 4 structural.
+  The fourth structural feature, MutateX ΔΔG, is not included: Tabet et
+  al. used MutateX ΔΔG in their analysis but did not publish per-variant
+  values. It will be added once the values are available; until then 25
+  features are used. Domain identity is encoded with all
+  17 region labels in the CSV, so the model receives 8 + 17 + 1 + 3 = 29
+  feature columns, plus 2 missing-data indicators (31 columns, flat model).
 
   A. Substitution properties (8), computed from ref_aa3 / alt_aa3:
        blosum62               BLOSUM62[ref, alt]
@@ -41,23 +46,27 @@ THE 26 FEATURES
                               EGF-B, beta-prop, EGF-C, O-sugar,
                               linker_pre_TM, TM, NPxY
        is_vldl_blind_spot     1 if domain is LA2 or LA6
-  C. Structural (4), from PDB 9BDE / Tabet Table S3:
-       ddg_mutatex            MutateX ΔΔG (folding stability)
-       dist_apob100           min Cα distance to ApoB100
-       is_in_helix            DSSP α-helix
-       is_in_strand           DSSP β-strand
+  C. Structural (3 used):
+       dist_apob100           min Cα–Cα distance to ApoB100
+                              (PDB 9BDE, LDLR residues 66-354)
+       is_in_helix            DSSP helix (H, G, I)
+       is_in_strand           DSSP β-strand (E)
+                              (PDB 9BDE where resolved, otherwise PDB 1N7D;
+                              together LDLR residues 65-714)
+       (MutateX ΔΔG           not included, see above)
 
 MISSING STRUCTURAL DATA
-  Structural features exist only where 9BDE resolves the residue
-  (ΔΔG 44.9%, other structural features 59.6% of missense variants).
-  Missing values are set to 0 and two indicator columns are added
-  (ddg_missing, structure_missing) so the model can tell "missing" from
-  "value 0". The indicators are bookkeeping for missing data, not
-  additional biological features.
+  dist_apob100 exists for ~34% of missense variants (9BDE covers LA2 to
+  EGF-A) and secondary structure for ~74% (9BDE + 1N7D cover LA2 to
+  EGF-C). Signal, LA1, O-sugar, TM and the cytoplasmic tail are in neither
+  structure. Missing values are set to 0, and two indicator columns
+  (structure_missing for distance, ss_missing for secondary structure) let
+  the model tell "missing" from "value 0". The indicators are bookkeeping
+  for missing data, not additional biological features.
 
 MODELS
-  Flat          : all feature columns above (+ 2 missing-data indicators).
-  + interactions: flat model plus domain × feature terms for the 12
+  Flat          : all feature columns above (+ missing-data indicators).
+  + interactions: flat model plus domain × feature terms for the 11
                   non-domain features (A and C), so each feature can have
                   a different slope in each domain.
   Both: standardization -> ridge regression, penalty chosen by internal
@@ -77,7 +86,6 @@ OUTPUTS (written to --out_dir, default ridge_results/)
   fig_window_beta_propeller.png, fig_window_LA_repeats.png
 
 USAGE
-  python ldlr_ridge_v5.py --csv ldlr_variant_scores_v5.csv
   python ldlr_ridge_v5.py --csv ldlr_variant_scores_v5.csv --out_dir ridge_results
 
 REQUIREMENTS
@@ -135,9 +143,9 @@ GRANTHAM_POLARITY = {"A": 8.1, "R": 10.5, "N": 11.6, "D": 13.0, "C": 5.5,
 SUBSTITUTION_FEATS = ["blosum62", "delta_hydrophobicity", "delta_volume",
                       "delta_polarity", "delta_charge", "is_cys_change",
                       "is_pro_intro", "is_gly_change"]
-STRUCTURAL_FEATS   = ["ddg_mutatex", "dist_apob100", "is_in_helix", "is_in_strand"]
-MISSING_FLAGS      = ["ddg_missing", "structure_missing"]
-INTERACT_FEATS     = SUBSTITUTION_FEATS + STRUCTURAL_FEATS   # 12 features
+STRUCTURAL_FEATS   = ["dist_apob100", "is_in_helix", "is_in_strand"]
+MISSING_FLAGS      = ["structure_missing", "ss_missing"]
+INTERACT_FEATS     = SUBSTITUTION_FEATS + STRUCTURAL_FEATS   # 11 features
 
 
 # =========================================================================
@@ -157,7 +165,7 @@ def load_missense(csv_path: str) -> pd.DataFrame:
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Compute the 26 features (+ missing-data indicators)."""
+    """Compute the features (+ missing-data indicators)."""
     df = df.copy()
     ref = df["ref_aa3"].map(AA3_TO_1)
     alt = df["alt_aa3"].map(AA3_TO_1)
@@ -178,9 +186,9 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     # B. Domain identity
     df["is_vldl_blind_spot"] = df["is_vldl_blind_spot"].astype(int)
 
-    # C. Structural, with missing-data indicators
-    df["ddg_missing"] = df["ddg_mutatex"].isna().astype(int)
+    # C. Structural (9BDE / 1N7D), with missing-data indicators
     df["structure_missing"] = df["dist_apob100"].isna().astype(int)
+    df["ss_missing"] = df["is_in_helix"].isna().astype(int)
     for col in STRUCTURAL_FEATS:
         df[col] = df[col].fillna(0.0)
     return df
@@ -342,7 +350,7 @@ def plot_windows(win, path, by_domain):
 # =========================================================================
 
 def main():
-    ap = argparse.ArgumentParser(description="LDLR 26-feature ridge regression")
+    ap = argparse.ArgumentParser(description="LDLR ridge regression (26-feature design)")
     ap.add_argument("--csv", default="ldlr_variant_scores_v5.csv")
     ap.add_argument("--out_dir", default="ridge_results")
     args = ap.parse_args()
@@ -386,7 +394,7 @@ def main():
 
     # Summary
     lines = [
-        "LDLR 26-feature ridge regression — summary",
+        "LDLR ridge regression (26-feature design, 25 used) — summary",
         f"n = {len(df)} true missense variants; {N_FOLDS}-fold CV, random_state = {RANDOM_STATE}",
         "",
         "GLOBAL PERFORMANCE (Pearson r, out-of-fold)",
